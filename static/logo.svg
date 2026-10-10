@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="Remnawave Downdetector icon">
+  <defs>
+    <radialGradient id="tile" cx="49%" cy="73%" r="83%" fx="49%" fy="73%">
+      <stop offset="0" stop-color="#fafafa"/>
+      <stop offset="0.48" stop-color="#e8eaec"/>
+      <stop offset="1" stop-color="#aeb2b6"/>
+    </radialGradient>
+    <linearGradient id="dark" x1="0" y1="0" x2="0.95" y2="1">
+      <stop offset="0" stop-color="#1b1b1b"/>
+      <stop offset="1" stop-color="#292929"/>
+    </linearGradient>
+    <linearGradient id="alert" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#202020"/>
+      <stop offset="0.25" stop-color="#242020"/>
+      <stop offset="0.55" stop-color="#a01818"/>
+      <stop offset="0.78" stop-color="#ff191b"/>
+      <stop offset="1" stop-color="#ff641d"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" rx="235" fill="url(#tile)"/>
+  <rect x="212" y="390" width="80" height="168" rx="40" fill="url(#dark)"/>
+  <rect x="340" y="290" width="80" height="340" rx="40" fill="url(#dark)"/>
+  <rect x="596" y="390" width="80" height="250" rx="40" fill="url(#dark)"/>
+  <rect x="716" y="474" width="76" height="158" rx="38" fill="url(#dark)"/>
+  <rect x="824" y="540" width="64" height="93" rx="32" fill="url(#dark)"/>
+  <path d="M472 252 C472 230 490 212 512 212 C534 212 552 230 552 252 L552 678 C552 689 558 695 570 695 L591 695 C612 695 623 719 607 735 L531 814 C520 826 504 826 493 814 L417 735 C401 719 412 695 433 695 L454 695 C466 695 472 689 472 678 Z" fill="url(#alert)"/>
+</svg>

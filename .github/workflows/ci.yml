@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Python syntax
+        run: python -m compileall -q main.py remnadown
+      - name: Import application
+        env:
+          APP_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          ADMIN_PASSWORD: test-password-for-ci
+          REMNAWAVE_URL: https://panel.example.com
+          REMNAWAVE_API_TOKEN: test-token
+          DATABASE_PATH: /tmp/remnadown.db
+        run: python -c "import main; main.init_db(); print(main.app.title)"
+      - name: Validate Compose
+        run: |
+          DOMAIN=monitor.example.com docker compose --env-file .env.example config --quiet
+      - name: Build image
+        run: docker build -t remnadown-app:test .
+      - name: Import application in image
+        run: >-
+          docker run --rm
+          -e APP_SECRET=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          -e ADMIN_PASSWORD=test-password-for-ci
+          -e REMNAWAVE_URL=https://panel.example.com
+          -e REMNAWAVE_API_TOKEN=test-token
+          -e DATABASE_PATH=/tmp/remnadown.db
+          remnadown-app:test
+          python -c "import main; print(main.app.title)"

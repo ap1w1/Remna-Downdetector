@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#161b22">
+  <title>RemnaDownDetector</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
+  <link rel="stylesheet" href="/static/app.css?v=20261009-2">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-22">
+</head>
+<body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
+  <div class="app-shell">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-brand">
+        <img src="/static/logo.svg?v=20261011-1" alt="">
+        <span><b>Remna</b>Down</span>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-caption">Мониторинг</div>
+        <button class="nav-item active" type="button" data-view="overview">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="6" rx="2"/><rect x="4" y="14" width="16" height="6" rx="2"/><path d="M8 7h.01M8 17h.01"/></svg>
+          <span>Ноды</span>
+        </button>
+        <button class="nav-item" type="button" data-view="events">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/></svg>
+          <span>События</span>
+          <i id="events-count" hidden>0</i>
+        </button>
+        <button class="nav-item" type="button" data-view="logs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg><span>Логи</span></button>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-caption">Интеграции</div>
+        <button class="nav-item" type="button" data-view="dpi-checker"><img src="/api/integration-icon/dpi" alt=""><span>DPI Checker</span></button>
+        <button class="nav-item" type="button" data-view="domains"><span class="nav-dns-icons"><img src="/api/integration-icon/regru" alt=""><img src="/api/integration-icon/cloudflare" alt=""></span><span>DNS интеграции</span></button>
+        <button class="nav-item" type="button" data-view="webhooks">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.5a4 4 0 1 1-2-3.46M6 7.5a4 4 0 1 1 2 3.46M8 16h8"/></svg>
+          <span>Вебхуки</span>
+        </button>
+        <button class="nav-item" type="button" data-view="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.09A1.7 1.7 0 0 0 8.55 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1A1.7 1.7 0 0 0 2.5 13.6H2.4V9.6h.1A1.7 1.7 0 0 0 4.2 8a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.55 3.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2h4v.09A1.7 1.7 0 0 0 15 3.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+          <span>Настройки</span>
+        </button>
+        <button class="nav-item" type="button" data-view="help">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.6 2.25c-.8.42-1.3.9-1.3 1.75M12 17h.01"/></svg>
+          <span>Помощь</span>
+        </button>
+      </div>
+
+      <div class="sidebar-foot">
+        <span class="live-dot"></span>
+        <span>RemnaDownDetector</span>
+      </div>
+    </aside>
+
+    <button id="sidebar-backdrop" class="sidebar-backdrop" type="button" aria-label="Закрыть меню"></button>
+
+    <div class="workspace">
+      <header class="topbar">
+        <button id="menu-toggle" class="icon-button menu-toggle" type="button" aria-label="Открыть меню">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="topbar-spacer"></div>
+        <button id="sound-toggle" class="icon-button" type="button" title="Звуковые уведомления" aria-label="Включить звуковые уведомления" aria-pressed="false">
+          <svg class="sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a8 8 0 0 1 0 11"/></svg>
+          <svg class="sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5ZM16 10l5 5M21 10l-5 5"/></svg>
+        </button>
+        <a class="icon-button community-link github-link" href="https://github.com/ap1w1/Remna-Downdetector" target="_blank" rel="noopener noreferrer" title="GitHub" aria-label="Открыть GitHub проекта">
+          <svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17.75l-6.172 3.245l1.179-6.873l-5-4.867l6.9-1 3.086-6.253 3.086 6.253 6.9 1-5 4.867 1.179 6.873z"/></svg>
+        </a>
+        <a class="icon-button community-link telegram-link" href="https://t.me/remnadown" target="_blank" rel="noopener noreferrer" title="Telegram" aria-label="Открыть Telegram проекта">
+          <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 256 256" aria-hidden="true"><path d="M231.49,23.16a13,13,0,0,0-13.23-2.26L15.6,100.21a18.22,18.22,0,0,0,3.12,34.86L68,144.74V200a20,20,0,0,0,34.4,13.88l22.67-23.51L162.35,223a20,20,0,0,0,32.7-10.54L235.67,35.91A13,13,0,0,0,231.49,23.16ZM139.41,77.52,77.22,122.09l-34.43-6.75ZM92,190.06V161.35l15,13.15Zm81.16,10.52L99.28,135.81,205.59,59.63Z"/></svg>
+        </a>
+        <button id="support-project" class="icon-button support-button" type="button" title="Поддержать проект" aria-label="Поддержать проект">♥</button><form method="post" action="/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf }}">
+          <button class="icon-button" type="submit" title="Выйти" aria-label="Выйти">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 17 5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
+          </button>
+        </form>
+      </header>
+
+      <main class="content">
+        <section id="overview" class="view active">
+          <div id="summary" class="summary-grid" aria-live="polite"></div>
+
+          <div class="section-toolbar">
+            <div class="toolbar-heading">
+              <span class="theme-icon cyan"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="6" rx="2"/><rect x="4" y="13" width="16" height="6" rx="2"/><path d="M8 8h.01M8 16h.01"/></svg></span>
+              <div><h1>Ноды</h1><p id="nodes-subtitle">Загрузка данных…</p></div>
+            </div>
+            <div class="toolbar-actions">
+              <div class="popover-control" id="search-control">
+                <button id="search-trigger" class="icon-button" type="button" title="Поиск" aria-label="Открыть поиск" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+                </button>
+                <div id="search-popover" class="control-popover search-popover" hidden>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+                  <input id="search" type="search" placeholder="Найти ноду" autocomplete="off" aria-label="Поиск ноды">
+                </div>
+              </div>
+
+              <div class="popover-control" id="filter-control">
+                <button id="filter-trigger" class="icon-button" type="button" title="Фильтры" aria-label="Открыть фильтры" aria-expanded="false">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+                </button>
+                <div id="filter-popover" class="control-popover filter-popover" hidden>
+                  <label>Состояние<select id="status-filter"><option value="all">Все состояния</option><option value="up">Работают</option><option value="down">Падение онлайна</option><option value="unavailable">Недоступны</option></select></label>
+                  <label>Страна<select id="country-filter"><option value="all">Все страны</option></select></label>
+                  <label>Сортировка<select id="node-sort"><option value="panel">Как в Remnawave</option><option value="online-desc">Онлайн: больше</option><option value="online-asc">Онлайн: меньше</option><option value="name-asc">Название А–Я</option><option value="name-desc">Название Я–А</option></select></label>
+                </div>
+              </div>
+
+              <button id="refresh" class="icon-button accent" type="button" title="Обновить" aria-label="Обновить данные">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 5v6h-6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="nodes" class="nodes-list"><div class="empty">Загрузка нод…</div></div>
+        </section>
+
+        <section id="events" class="view">
+          <div class="page-heading">
+            <div class="toolbar-heading">
+              <span class="theme-icon violet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M12 7v5l3 2"/></svg></span>
+              <div><h1>События</h1><p>Изменения состояния и падения онлайна</p></div>
+            </div>
+            <button id="clear-events" class="secondary-button danger-button compact-action" type="button">Очистить события</button>
+          </div>
+          <div class="event-filters panel-surface">
+            <label><span>Поиск по ноде</span><input id="event-search" placeholder="Название ноды" autocomplete="off"></label>
+              <label><span>Тип события</span><select id="event-filter"><option value="all">Все события</option><option value="node.unavailable">Нода недоступна</option><option value="node.available">Нода доступна</option><option value="node.online_drop">Падение онлайна</option><option value="node.online_recovered">Онлайн восстановлен</option><option value="node.ip_changed">IP ноды изменён</option><option value="domain.ip_changed">IP домена изменён</option><option value="node.cpu_threshold">Превышение CPU</option><option value="node.ram_threshold">Превышение RAM</option><option value="node.rx_threshold">Превышение RX</option><option value="node.tx_threshold">Превышение TX</option><option value="dpi.check_started">DPI запущен</option><option value="dpi.check_completed">DPI завершён</option></select></label>
+          </div>
+          <div id="events-list" class="events-list"><div class="empty">Загрузка событий…</div></div>
+        </section>
+
+        <section id="webhooks" class="view">
+          <div class="page-heading">
+            <div class="toolbar-heading">
+              <span class="theme-icon indigo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.5a4 4 0 1 1-2-3.46M6 7.5a4 4 0 1 1 2 3.46M8 16h8"/></svg></span>
+              <div><h1>Вебхуки</h1><p>Уведомления для всех или отдельных нод</p></div>
+            </div>
+            <details class="webhook-help">
+              <summary title="Пример вебхука" aria-label="Показать пример вебхука">!</summary>
+              <div class="webhook-help-popover">
+                <h3>События вебхука</h3>
+                <code>node.unavailable</code><p>Нода потеряла соединение.</p>
+                <code>node.available</code><p>Нода снова доступна.</p>
+                <code>node.online_drop</code><p>Онлайн упал ниже заданного порога.</p>
+                <code>node.online_recovered</code><p>Онлайн восстановился.</p>
+                <code>node.ip_changed</code><p>IP ноды автоматически заменён.</p>
+                <code>domain.ip_changed</code><p>DNS-запись домена заменена после смены IP ноды.</p>
+                <code>dpi.balance_low</code><p>Баланс DPI Checker ниже заданного порога.</p>
+                <pre>{
+  "event": "node.online_drop",
+  "node": {"uuid": "...", "name": "Нидерланды-2"},
+  "sample": {"online": 120},
+  "source": "RemnaDownDetector"
+}</pre>
+                <small>При заданном секрете тело подписывается HMAC-SHA256 в заголовке <code>X-Remna-Signature</code>.</small>
+              </div>
+            </details>
+          </div>
+
+          <div class="webhook-grid">
+            <form id="webhook-form" class="settings-card">
+              <div class="card-heading"><span class="theme-icon cyan"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><div><h2>Новый вебхук</h2><p>Публичный HTTPS endpoint</p></div></div>
+              <label>Название<input name="name" required maxlength="80"></label>
+              <label>HTTPS URL<input name="url" type="url" placeholder="https://example.com/webhook" required></label>
+              <label>HMAC-секрет<input name="secret" type="password" autocomplete="new-password"></label>
+              <details class="event-select-dropdown"><summary><span>Выбрать события</span><b id="new-webhook-event-count">Все события</b></summary><div id="new-webhook-events" class="event-option-list"></div></details>
+              <button class="primary-button" type="submit">Добавить вебхук</button>
+            </form>
+            <div class="settings-card">
+              <div class="card-heading"><span class="theme-icon violet"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h14M5 17h14"/></svg></span><div><h2>Маршруты</h2><p>Выбор маршрутов доступен в каждой ноде</p></div></div>
+              <div id="hooks-list" class="hooks-list"><div class="empty">Вебхуков пока нет</div></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="settings" class="view">
+          <div class="page-heading">
+            <div class="toolbar-heading">
+              <span class="theme-icon cyan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.09A1.7 1.7 0 0 0 8.55 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1A1.7 1.7 0 0 0 2.5 13.6H2.4V9.6h.1A1.7 1.7 0 0 0 4.2 8a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.55 3.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2h4v.09A1.7 1.7 0 0 0 15 3.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg></span>
+              <div><h1>Настройки</h1><p>Мониторинг, DPI Checker и уведомления</p></div>
+            </div>
+          </div>
+
+          <form id="app-settings" class="settings-grid">
+            <article class="settings-card">
+              <div class="card-heading"><span class="theme-icon cyan"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 13h5"/></svg></span><div><h2>Мониторинг</h2><p>Общие параметры хранения и опроса</p></div></div>
+              <div class="field-grid">
+                <label>Хранить историю, дней<input name="history_days" type="number" min="1" max="365" required></label>
+                <label>Интервал опроса и обновления, секунд<input name="poll_interval_seconds" type="number" min="10" max="3600" required></label>
+              </div>
+              <label>Часовой пояс<select name="timezone" class="timezone-select" required><option value="Europe/Kaliningrad">UTC+2 · Калининград</option><option value="Europe/Moscow">UTC+3 · Москва</option><option value="Europe/Samara">UTC+4 · Самара</option><option value="Asia/Yekaterinburg">UTC+5 · Екатеринбург</option><option value="Asia/Omsk">UTC+6 · Омск</option><option value="Asia/Krasnoyarsk">UTC+7 · Красноярск</option><option value="Asia/Irkutsk">UTC+8 · Иркутск</option><option value="Asia/Yakutsk">UTC+9 · Якутск</option><option value="Asia/Vladivostok">UTC+10 · Владивосток</option><option value="Asia/Magadan">UTC+11 · Магадан</option><option value="Asia/Kamchatka">UTC+12 · Камчатка</option><option value="Asia/Almaty">UTC+5 · Алматы</option><option value="Asia/Tashkent">UTC+5 · Ташкент</option><option value="Europe/Berlin">Европа · Берлин</option><option value="UTC">UTC · Всемирное время</option></select></label>
+              <div class="field-grid sound-settings"><label>Звук уведомления<select id="notification-sound"><option value="signal">Сигнал</option><option value="double">Двойной</option><option value="soft">Мягкий</option><option value="alarm">Тревога</option></select></label><label id="sound-duration-field">Длительность<select id="notification-sound-duration"><option value="0.2">Короткая · 0,2 сек</option><option value="0.4">Обычная · 0,4 сек</option><option value="0.8">Длинная · 0,8 сек</option><option value="1.2">Очень длинная · 1,2 сек</option></select></label><label>Громкость <span id="sound-volume-value">60%</span><input id="notification-sound-volume" type="range" min="0" max="100" value="60"></label></div>
+              <div class="sound-actions"><button id="preview-sound" class="primary-button compact-action" type="button">▶ Прослушать звук</button></div><div class="settings-divider"><span class="theme-icon cyan">DNS</span><div><h3>DNS-интеграции</h3><p>Доступы и TTL провайдеров</p></div></div><div class="field-grid dns-settings-fields"><label>REG.RU логин<input name="regru_username" autocomplete="username" placeholder="Без изменения"></label><label>REG.RU пароль<input name="regru_password" type="password" autocomplete="new-password" placeholder="Без изменения"></label><label>REG.RU TTL, сек<input name="regru_ttl" type="number" min="60" max="86400" value="600"></label><label>Cloudflare API Token<input name="cloudflare_api_token" type="password" autocomplete="new-password" placeholder="Zone Read + DNS Write"></label><label>Cloudflare TTL, сек<input name="cloudflare_ttl" type="number" min="60" max="86400" value="600"></label></div><p class="form-hint">TTL по умолчанию — 600 секунд.</p>
+              <p class="form-hint">Индивидуальный интервал ноды имеет приоритет над общим.</p>
+            </article>
+
+            <article class="settings-card telegram-card">
+              <div class="card-heading"><span class="theme-icon indigo"><svg viewBox="0 0 24 24"><path d="m21 3-8.5 18-2-8-8-2L21 3Z"/><path d="m10.5 13 4-4"/></svg></span><div><h2>Telegram</h2><p id="telegram-state">Бот не настроен</p></div></div>
+              <label class="switch-row"><span><b>Отправлять уведомления</b><small>События нод и авторизации</small></span><input name="telegram_enabled" type="checkbox"><i></i></label>
+              <label>Токен бота<input name="telegram_bot_token" type="password" autocomplete="new-password" placeholder="Оставьте пустым, чтобы не менять"></label>
+              <label>Chat ID<input name="telegram_chat_id" inputmode="numeric" placeholder="-100..."></label>
+              <div class="field-grid telegram-fields">
+                <label>Топик событий<input name="telegram_events_topic" inputmode="numeric" placeholder="Необязательно"></label>
+                <label>Топик авторизаций<input name="telegram_auth_topic" inputmode="numeric" placeholder="Необязательно"></label>
+              </div>
+              <details class="event-select-dropdown"><summary><span>Уведомления Telegram</span><b id="telegram-event-count">Все события</b></summary><div id="telegram-event-types" class="event-option-list"></div></details>
+              <p class="form-hint">Без ID топика сообщение отправляется в общий чат.</p>
+            </article>
+
+            <div class="settings-actions"><button class="primary-button" type="submit">Сохранить настройки</button></div>
+          </form>
+        </section>
+        <section id="logs" class="view"><div class="page-heading"><div class="toolbar-heading"><span class="theme-icon red">!</span><div><h1>Логи</h1><p>Ошибки приложения, интеграций и недостаточные права API-токена</p></div></div></div><div class="event-filters panel-surface"><label><span>Поиск</span><input id="log-search" type="search" placeholder="Текст, источник или ошибка"></label><label><span>Уровень</span><select id="log-level"><option value="all">Все уровни</option><option value="ERROR">Ошибки</option><option value="WARNING">Предупреждения</option><option value="INFO">Информация</option></select></label><button id="refresh-logs" class="secondary-button" type="button">Обновить</button></div><div id="logs-list" class="logs-list"><div class="empty">Загрузка логов…</div></div></section>
+        <section id="dpi-checker" class="view">
+          <div class="page-heading"><div class="toolbar-heading"><span class="theme-icon violet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M4 12h16M12 4a15 15 0 0 1 0 16"/></svg></span><div><h1>DPI Checker</h1><p>Подключение сервиса, ручные и автоматические проверки</p></div></div></div>
+          <div class="dpi-workspace">
+            <article class="settings-card dpi-integration-card">
+              <div class="card-heading"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>Подключение</h2><p id="dpi-api-state">API-токен не настроен</p></div></div>
+              <div class="dpi-account"><div><span>Баланс</span><b id="dpi-balance">—</b></div><div><span>Потрачено</span><b id="dpi-spent">—</b></div></div>
+              <button id="change-dpi-token" class="primary-button compact-action dpi-token-button" type="button">Изменить API-токен</button>
+              <div class="dpi-integration-options">
+                <label class="switch-row"><span><b>Инфрабиллинг Remnawave</b><small>Записывать стоимость завершённых проверок</small></span><input form="app-settings" name="dpi_infra_billing_enabled" type="checkbox"><i></i></label>
+                <label>Баланс ниже, $<input form="app-settings" name="dpi_balance_threshold" type="number" min="0" max="100000" step="0.01"></label>
+              </div>
+            </article>
+            <article class="settings-card dpi-manual-card">
+              <div class="card-heading"><span class="theme-icon cyan">▶</span><div><h2>Новая проверка</h2><p>Выберите цель, способ проверки и точки запуска</p></div></div>
+              <div class="dpi-manual-fields">
+                <details id="dpi-node-picker" class="region-picker node-multi-picker"><summary><span>Ноды</span><b id="dpi-node-count">Выберите ноды</b></summary><div class="region-picker-popover"><div id="dpi-node-options" class="check-list node-check-list"></div></div></details>
+                <label>Способ проверки<select id="dpi-check-kind"><option value="ip">По IP / домену</option><option value="vless">По VLESS ключу</option></select></label>
+                <details id="russia-pops-field" class="region-picker"><summary><span>Регионы РФ</span><b id="region-picker-count">Оптимальный набор</b></summary><div class="region-picker-popover"><input id="region-search" type="search" placeholder="Найти регион" autocomplete="off"><div id="russia-pops" class="check-list compact"><span class="muted">Загрузка регионов…</span></div></div></details>
+              </div>
+              <button id="dpi-run" class="primary-button dpi-run-button" type="button">Запустить проверку</button>
+            </article>
+            <article class="settings-card dpi-schedule-card">
+              <div class="schedule-card-head"><div class="card-heading"><span class="theme-icon indigo">◷</span><div><h2>Автопроверка</h2><p>Постоянный интервал или выбранные дни недели</p></div></div><label class="switch-control" aria-label="Включить автопроверку"><input id="dpi-schedule-enabled" form="app-settings" name="dpi_schedule_enabled" type="checkbox"><i></i></label></div>
+              <div id="dpi-schedule-settings" class="dpi-schedule-settings" hidden>
+                <div class="schedule-primary-row"><label>Режим<select id="dpi-schedule-mode" form="app-settings" name="dpi_schedule_mode"><option value="interval">Через интервал</option><option value="daily">По дням недели</option></select></label><label id="dpi-interval-field">Запускать каждые, минут<input form="app-settings" name="dpi_interval_minutes" type="number" min="15" max="43200"></label></div>
+                <input form="app-settings" name="dpi_schedule_time" type="hidden" value="03:00"><input form="app-settings" name="dpi_schedule_locations" type="hidden" value="russia">
+                <div id="dpi-calendar-field" class="inline-schedule" hidden><div class="inline-schedule-head"><div><b>Дни и время запуска</b><small>Для каждого дня можно добавить несколько запусков</small></div><strong id="schedule-summary">Расписание не задано</strong></div><div id="dpi-weekly-calendar" class="schedule-calendar"></div></div>
+                <div class="schedule-targets">
+                  <details class="region-picker"><summary><span>Ноды</span><b id="schedule-node-count">Все ноды</b></summary><div class="region-picker-popover"><div id="schedule-nodes" class="check-list node-check-list"></div></div></details>
+                  <details class="region-picker"><summary><span>Регионы РФ</span><b id="schedule-region-count">Оптимальный набор</b></summary><div class="region-picker-popover"><input id="schedule-region-search" type="search" placeholder="Найти регион" autocomplete="off"><div id="schedule-pops" class="check-list compact"></div></div></details>
+                </div>
+              </div>
+              <div class="dpi-settings-actions"><p>Настройки подключения и расписания сохраняются вместе.</p><button class="primary-button compact-action" type="submit" form="app-settings">Сохранить настройки DPI</button></div>
+            </article>
+          </div>
+          <div class="dpi-history-grid"><article class="settings-card"><div class="card-heading"><div><h2>История проверок</h2><p>Полный ответ и техническая информация доступны внутри записи</p></div></div><div id="dpi-result" class="dpi-result"><div class="empty">Выберите ноду</div></div></article><article class="settings-card dpi-expenses-card"><div class="card-heading"><div><h2>Расходы</h2><p>Списания DPI Checker</p></div></div><div id="dpi-expenses" class="dpi-expenses"></div></article></div>
+        </section>
+        <section id="domains" class="view"><div class="page-heading"><div class="toolbar-heading"><span class="theme-icon cyan">DNS</span><div><h1 id="domains-title">Домены</h1><p>Связи Remnawave Hosts с нодами</p></div></div><div class="domain-toolbar"><label><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="domain-search" type="search" placeholder="Домен, IP или название ноды"></label><button id="refresh-domains" class="icon-button" type="button" title="Обновить"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button></div></div><div id="domains-list" class="domains-list"><div class="empty">Загрузка доменов…</div></div></section>
+        <section id="help" class="view">
+          <div class="page-heading"><div class="toolbar-heading"><span class="theme-icon cyan">?</span><div><h1>Помощь</h1><p>События и форматы вебхуков</p></div></div></div>
+          <article class="settings-card settings-card-wide webhook-events-help">
+            <div class="card-heading"><div><h2>Все события вебхуков</h2><p>При заданном секрете тело подписывается заголовком X-Remna-Signature</p></div></div>
+            <div class="event-reference">
+              <details><summary><code>node.unavailable</code><span>Нода перестала подключаться</span></summary><pre>{"event":"node.unavailable","node":{"uuid":"...","name":"Node"},"sample":{"online":0,"connected":false}}</pre></details>
+              <details><summary><code>node.available</code><span>Нода снова подключилась</span></summary><pre>{"event":"node.available","node":{"uuid":"...","name":"Node"},"sample":{"online":42,"connected":true}}</pre></details>
+              <details><summary><code>node.online_drop</code><span>Онлайн упал ниже порога</span></summary><pre>{"event":"node.online_drop","node":{"uuid":"..."},"sample":{"online":12,"baseline":40,"drop_percent":70}}</pre></details>
+              <details><summary><code>node.online_recovered</code><span>Онлайн восстановился</span></summary><pre>{"event":"node.online_recovered","node":{"uuid":"..."},"sample":{"online":39,"baseline":40}}</pre></details>
+              <details><summary><code>node.ip_changed</code><span>IP автоматически заменён</span></summary><pre>{"event":"node.ip_changed","sample":{"old_address":"203.0.113.1","new_address":"203.0.113.2","automatic":true}}</pre></details>
+              <details><summary><code>domain.ip_changed</code><span>DNS-запись домена обновлена</span></summary><pre>{"event":"domain.ip_changed","sample":{"provider":"Cloudflare","domain":"node.example.com","old_ip":"203.0.113.1","new_ip":"203.0.113.2","ttl":600}}</pre></details>
+              <details><summary><code>node.cpu_threshold</code><span>CPU превысил порог</span></summary><pre>{"event":"node.cpu_threshold","node":{"uuid":"...","name":"Node"},"sample":{"cpu_percent":92,"online":41}}</pre></details>
+              <details><summary><code>node.ram_threshold</code><span>RAM превысила порог</span></summary><pre>{"event":"node.ram_threshold","node":{"uuid":"...","name":"Node"},"sample":{"ram_percent":88,"online":41}}</pre></details>
+              <details><summary><code>node.rx_threshold</code><span>RX превысил лимит</span></summary><pre>{"event":"node.rx_threshold","node":{"uuid":"...","name":"Node"},"sample":{"rx_mbps":850}}</pre></details>
+              <details><summary><code>node.tx_threshold</code><span>TX превысил лимит</span></summary><pre>{"event":"node.tx_threshold","node":{"uuid":"...","name":"Node"},"sample":{"tx_mbps":620}}</pre></details>
+              <details><summary><code>dpi.check_started</code><span>DPI-проверка поставлена в очередь</span></summary><pre>{"event":"dpi.check_started","node":{"uuid":"...","name":"Node"},"sample":{"target":"203.0.113.1","location":"russia","provider_id":9306}}</pre></details>
+              <details><summary><code>dpi.check_completed</code><span>DPI-проверка завершена</span></summary><pre>{"event":"dpi.check_completed","node":{"uuid":"...","name":"Node"},"sample":{"target":"203.0.113.1","status":"completed","results":[]}}</pre></details>
+              <details><summary><code>dpi.balance_low</code><span>Баланс ниже порога</span></summary><pre>{"event":"dpi.balance_low","data":{"balance":0.75,"threshold":1.0,"currency":"USD"}}</pre></details>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <dialog id="node-dialog" class="node-dialog">
+    <div class="dialog-header">
+      <div class="dialog-title">
+        <span class="theme-icon teal"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span>
+        <div><h2 id="dialog-title">Нода</h2><p id="dialog-address">—</p></div>
+      </div>
+      <button class="dialog-close" type="button" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></svg></button>
+    </div>
+
+    <div class="dialog-scroll">
+      <div class="node-detail-grid">
+        <article class="detail-card">
+          <div class="detail-card-heading">
+            <div class="card-heading"><span class="theme-icon teal"><svg viewBox="0 0 24 24"><path d="M5 12.6a10 10 0 0 1 14 0M8 15.6a6 6 0 0 1 8 0M11 18.5a2 2 0 0 1 2 0"/></svg></span><div><h3>Детали ноды</h3><p id="dialog-provider">Провайдер не указан</p></div></div>
+            <span id="dialog-status" class="status-pill healthy">Онлайн</span>
+          </div>
+          <div class="traffic-block">
+            <div><span>Общий трафик</span><b id="dialog-traffic-total">—</b></div><span>∞</span>
+            <div class="progress-track"><i id="dialog-traffic-bar"></i></div>
+          </div>
+          <div class="quick-metrics">
+            <div class="quick-metric teal"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><b id="dialog-online">0</b></div>
+            <div class="quick-metric violet"><svg viewBox="0 0 24 24"><path d="M12 2v20M5 12h14M7 7l10 10M17 7 7 17"/></svg><b id="dialog-xray-version">—</b></div>
+            <div class="quick-metric indigo"><svg viewBox="0 0 24 24"><path d="M4 14h3l2-7 4 12 2-5h5"/></svg><b id="dialog-node-version">—</b></div>
+          </div>
+        </article>
+
+        <article class="detail-card">
+          <div class="detail-card-heading">
+            <div class="card-heading"><span class="theme-icon violet"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="12" height="12" rx="2"/><path d="M8 20h8M11 16v4M17 8h4v11h-7"/></svg></span><div><h3>Система</h3><p id="dialog-system-badge">LINUX / X64</p></div></div>
+            <span class="status-pill healthy" id="dialog-uptime">—</span>
+          </div>
+          <div class="system-panel memory-panel">
+            <span>Память</span>
+            <b id="dialog-memory-values">—</b>
+            <div class="progress-track"><i id="dialog-memory-bar"></i></div>
+          </div>
+          <div class="system-panel network-panel">
+            <span>Интерфейс</span>
+            <div class="network-values"><div><small>↓ RX</small><b id="dialog-rx">—</b><span id="dialog-rx-total">Всего: —</span></div><div><small>↑ TX</small><b id="dialog-tx">—</b><span id="dialog-tx-total">Всего: —</span></div></div>
+          </div>
+          <div class="system-panel cpu-panel">
+            <span>Система</span>
+            <b id="dialog-cpu">CPU —</b>
+            <small id="dialog-load">Load: —</small>
+          </div>
+        </article>
+      </div>
+
+      <article class="detail-card chart-card">
+        <div class="chart-head">
+          <div class="card-heading"><span class="theme-icon cyan"><svg viewBox="0 0 24 24"><path d="M4 18V6M4 18h16M7 14l3-4 3 2 4-6"/></svg></span><div><h3>История метрик</h3><p>Наведите курсор на график для точных значений</p></div></div>
+          <div class="range-tabs"><button type="button" data-days="1" class="active">24ч</button><button type="button" data-days="3">3д</button><button type="button" data-days="7">7д</button><button type="button" data-days="14">14д</button><button type="button" data-days="30">30д</button></div>
+        </div>
+        <div class="metric-tabs"><button type="button" data-metric="online" class="active">Онлайн</button><button type="button" data-metric="cpu_percent">CPU</button><button type="button" data-metric="ram_percent">RAM</button><button type="button" data-metric="network">RX / TX</button></div>
+        <div class="chart-summary"><div><span>Сейчас</span><b id="chart-current">—</b></div><div><span>Максимум</span><b id="chart-max">—</b></div><div><span>Минимум</span><b id="chart-min">—</b></div></div>
+        <div id="dialog-chart" class="interactive-chart"><div class="empty">Загрузка истории…</div></div>
+      </article>
+
+      <div class="node-menu-tabs"><button type="button" class="active" data-node-panel="settings">Мониторинг</button><button type="button" data-node-panel="automation">Автоматизация</button><button type="button" data-node-panel="ips">Резервные IP</button><button id="open-node-dpi" class="node-dpi-action" type="button">Проверить DPI</button></div>
+      <div class="node-settings-grid">
+        <form id="node-settings" class="node-settings-form">
+        <section class="settings-card node-panel active" data-panel="settings">
+          <div class="card-heading"><span class="theme-icon cyan"><svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span><div><h3>Настройки ноды</h3><p>Чувствительность и уведомления</p></div></div>
+          <div class="field-grid three">
+            <label>Падение онлайна, %<input name="drop_percent" type="number" min="1" max="100" required></label>
+            <label>Хранение, дней<input name="retention_days" type="number" min="1" max="365" required></label>
+            <label>Опрос, секунд<input name="poll_interval_seconds" type="number" min="10" max="3600" placeholder="Общий"></label>
+          </div>
+          <fieldset><legend>Пороговые уведомления <small>0 — отключено</small></legend><div class="field-grid"><label>CPU, %<input name="cpu_threshold" type="number" min="0" max="100" step="1"></label><label>RAM, %<input name="ram_threshold" type="number" min="0" max="100" step="1"></label><label>RX, Мбит/с<input name="rx_threshold_mbps" type="number" min="0" step="0.1"></label><label>TX, Мбит/с<input name="tx_threshold_mbps" type="number" min="0" step="0.1"></label></div></fieldset>
+          <label class="switch-row"><span><b>Вебхуки событий</b><small>Отправлять события этой ноды</small></span><input name="webhooks_enabled" type="checkbox"><i></i></label>
+          <fieldset><legend>Маршруты вебхуков</legend><div id="node-hooks" class="check-list compact"></div></fieldset>
+          <button class="primary-button" type="submit">Сохранить мониторинг</button>
+        </section>
+        <section class="settings-card node-panel automation-panel" data-panel="automation">
+          <div class="card-heading"><span class="theme-icon violet">↯</span><div><h3>Сценарий при падении онлайна</h3><p>Выберите действия — они выполнятся сверху вниз</p></div></div>
+          <input name="auto_dpi" type="hidden">
+          <div class="automation-trigger"><span>Условие запуска</span><b>Онлайн упал ниже порога из раздела «Мониторинг»</b></div>
+          <fieldset class="workflow-builder"><legend>Цепочка действий</legend><div id="node-action-chain" class="workflow-steps">
+            <label class="workflow-step"><span class="workflow-order">1</span><span class="workflow-copy"><b>Проверить IP через DPI</b><small>Проверить текущий адрес из выбранных регионов</small></span><input type="checkbox" value="dpi_ip"><i></i></label>
+            <label class="workflow-step"><span class="workflow-order">2</span><span class="workflow-copy"><b>Проверить VLESS ключ</b><small>Получить реальный VLESS URI и проверить подключение</small></span><input type="checkbox" value="dpi_vless"><i></i></label>
+            <label class="workflow-step"><span class="workflow-order">3</span><span class="workflow-copy"><b>Переключить на резервный IP</b><small>Использовать первый доступный адрес из пула ноды</small></span><input type="checkbox" value="rotate_ip"><i></i></label>
+            <label class="workflow-step"><span class="workflow-order">4</span><span class="workflow-copy"><b>Обновить связанные домены</b><small>Заменить адрес в настроенных DNS-интеграциях</small></span><input type="checkbox" value="replace_dns"><i></i></label>
+          </div></fieldset>
+          <div class="automation-options">
+            <fieldset id="vless-config-block" class="automation-section vless-source-card"><legend>VLESS для DPI Checker</legend><label>Источник ключа<select name="vless_mode" id="vless-mode"><option value="manual">Указать VLESS ключ</option><option value="remnawave">Взять у пользователя Remnawave</option><option value="temporary">Создать временного пользователя</option></select></label><label data-vless-field="manual">VLESS ключ<input name="vless_key" type="password" placeholder="vless://… или оставить без изменения"></label><label data-vless-field="remnawave">Username в Remnawave<input name="vless_username" placeholder="Пользователь с доступом к ноде"></label><div class="vless-temporary-note" data-vless-field="temporary"><b>Настраивать ничего не нужно</b><span>Система создаст пользователя <code>dpi_checker_*</code>, получит VLESS ключ и удалит пользователя после проверки.</span></div></fieldset>
+            <details id="node-regions-block" class="region-picker automation-section"><summary><span>Регионы DPI-проверок</span><b id="node-region-count">Оптимальный набор</b></summary><div class="region-picker-popover"><input id="node-region-search" type="search" placeholder="Найти регион"><div id="node-regions" class="check-list compact"></div></div></details>
+          </div>
+          <div class="automation-save"><p>Отключённые шаги сохраняются и не выполняются.</p><button class="primary-button compact-action" type="submit">Сохранить сценарий</button></div>
+        </section>
+        </form>
+
+        <article class="settings-card ip-pool-card node-panel" data-panel="ips">
+          <div class="card-heading"><span class="theme-icon cyan"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></span><div><h3>Резервные IP</h3><p>Перетаскивайте адреса для изменения приоритета</p></div><button id="toggle-ip-add" class="round-add" type="button" aria-label="Добавить IP">+</button></div>
+          <form id="ip-pool-form" class="ip-add-form" hidden><input name="address" placeholder="203.0.113.10" required><button class="primary-button" type="submit">Добавить и проверить</button><input name="priority" type="hidden" value="100"></form>
+          <div id="ip-check-warning" class="warning-note" hidden>При проверке нового IP адрес ноды временно изменяется. Нода может перезапуститься и несколько раз кратковременно отключиться.</div>
+          <label class="switch-row"><span><b>Автозамена IP</b><small>Используются валидные IP по приоритету</small></span><input id="auto-ip-replace" type="checkbox"><i></i></label>
+          <label class="switch-row"><span><b>Автоматически заменять адреса доменов</b><small>Только связанные Hosts в REG.RU и Cloudflare</small></span><input id="auto-dns-replace" type="checkbox"><i></i></label>
+          <label>Максимальное количество замен<input id="max-ip-replacements" type="number" min="1" max="100" value="1"></label>
+          <button id="save-ip-rotation" class="primary-button compact-action" type="button">Применить настройки</button>
+          <div id="ip-pool-list" class="ip-pool-list"><div class="empty">Резервные IP не добавлены</div></div>
+        </article>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="activate-ip-dialog" class="compact-dialog confirm-ip-dialog"><form method="dialog" id="activate-ip-form"><div class="dialog-header"><div class="dialog-title"><span class="theme-icon violet">IP</span><div><h2>Установить IP-адрес</h2><p id="activate-ip-address">—</p></div></div><button class="dialog-close" type="button" data-close-ip-dialog aria-label="Закрыть">×</button></div><div class="confirm-question"><b>1. Изменить основной IP ноды?</b><div><label><input type="radio" name="confirm_ip" value="yes"> Да</label><label><input type="radio" name="confirm_ip" value="no"> Нет</label></div></div><div class="confirm-question"><b>2. Обновить IP у всех привязанных доменов?</b><div><label><input type="radio" name="confirm_dns" value="yes"> Да</label><label><input type="radio" name="confirm_dns" value="no"> Нет</label></div></div><p class="form-hint">Предыдущий основной IP будет добавлен последним в список резервных.</p><div class="dialog-actions"><button class="secondary-button" type="button" data-close-ip-dialog>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
+  <dialog id="support-dialog" class="support-dialog"><button class="dialog-close" type="button" aria-label="Закрыть">×</button><div class="support-hero"><span>♥</span><div><h2>Поддержать проект</h2><p>Спасибо за поддержку развития RemnaDownDetector</p></div></div><div class="wallet-list"><button type="button" data-wallet="TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa"><b>USDT TRC20</b><code>TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa</code><span>Копировать</span></button><button type="button" data-wallet="UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN"><b>USDT TON</b><code>UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN</code><span>Копировать</span></button><button type="button" data-wallet="0x1B7905b1F335cdA649100f660d824018e6dE60A2"><b>USDT BEP20</b><code>0x1B7905b1F335cdA649100f660d824018e6dE60A2</code><span>Копировать</span></button><button type="button" data-wallet="bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy"><b>BTC</b><code>bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy</code><span>Копировать</span></button></div><div class="support-services"><a href="https://t.me/send?start=IV112jEOQ7s1" target="_blank" rel="noopener noreferrer"><span>↗</span><b>CryptoBot</b></a><a href="https://t.me/xrocket?start=inv_XGcVb2B8xfpV6Wi" target="_blank" rel="noopener noreferrer"><span>↗</span><b>XRocket</b></a></div></dialog>
+  <dialog id="dpi-token-dialog" class="compact-dialog dpi-token-dialog"><form method="dialog" id="dpi-token-form"><div class="dialog-header"><div class="dialog-title"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>API-токен DPI Checker</h2><p>Новый токен будет сохранён после подтверждения</p></div></div><button class="dialog-close" type="button" data-close-dpi-token aria-label="Закрыть">×</button></div><div class="dpi-token-dialog-body"><label>API-токен<input form="app-settings" name="dpi_api_key" type="password" placeholder="Введите новый токен" autocomplete="new-password"></label></div><div class="dialog-actions"><button class="secondary-button dialog-secondary-button" type="button" data-close-dpi-token>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
+  <script src="/static/app.js?v=20261011-24"></script>
+</body>
+</html>

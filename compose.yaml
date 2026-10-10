@@ -1,0 +1,38 @@
+services:
+  app:
+    image: remnadown-app:latest
+    build:
+      context: .
+      network: host
+    container_name: remna-down-detector
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:${APP_PORT:-8088}:8000"
+    volumes:
+      - remnadown-data:/data
+    networks: [web]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs: [/tmp]
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: remna-down-caddy
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [web]
+    security_opt: [no-new-privileges:true]
+    profiles: ["bundled-proxy"]
+networks:
+  web:
+volumes:
+  remnadown-data:
+  caddy-data:
+  caddy-config:

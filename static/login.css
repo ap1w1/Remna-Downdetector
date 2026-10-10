@@ -1,0 +1,24 @@
+.login-page{min-height:100svh;margin:0;display:grid;place-items:center;padding:32px;background:#161b23;color:#f8f9fa;font-family:Montserrat,Inter,system-ui,sans-serif}
+.auth-layout{width:min(500px,100%);max-width:none;margin:0;padding:0;display:grid;justify-items:center;gap:8px}
+.auth-brand{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:10px}.auth-logo{width:48px;height:48px;fill:none;stroke:#3bc9db;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.auth-brand h1{margin:0;font-family:Unbounded,Montserrat,sans-serif;font-size:28px;line-height:1;font-weight:700;letter-spacing:-.05em}.auth-brand h1 span{color:#3bc9db}.auth-brand h1 b{color:#fff;font:inherit}
+.auth-form-wrap{width:100%;padding:30px}.auth-form-wrap form{display:grid;gap:18px}.auth-form-wrap label{display:grid;gap:8px;color:#f1f3f5;font-size:13px;font-weight:500}.auth-input{height:42px;display:flex;align-items:center;border:1px solid #424242;border-radius:8px;background:#242424;transition:border-color .15s,box-shadow .15s}.auth-input:focus-within{border-color:#22b8cf;box-shadow:0 0 0 2px rgba(34,184,207,.16)}.auth-input svg{width:17px;height:17px;margin-left:13px;fill:none;stroke:#828282;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.auth-input input{height:100%;padding:0 13px 0 10px;border:0!important;border-radius:8px;background:transparent!important;color:#f8f9fa;box-shadow:none!important;font:14px Montserrat,Inter,sans-serif}.auth-input input::placeholder{color:#828282}
+.auth-submit{height:42px;width:100%;display:flex;align-items:center;justify-content:center;gap:9px;margin-top:8px;border:1px solid #424242;border-radius:8px;background:#2e2e2e;color:#f8f9fa;font:500 14px Montserrat,Inter,sans-serif;cursor:pointer;transition:background .15s,border-color .15s,transform .15s}.auth-submit:hover{background:#3b3b3b;border-color:#696969}.auth-submit:active{transform:translateY(1px)}.auth-submit svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.auth-security{display:flex;align-items:center;justify-content:center;gap:7px;margin:24px 0 0;color:#828282;font-size:10px}.auth-security i{width:6px;height:6px;border-radius:50%;background:#12b886;box-shadow:0 0 8px rgba(18,184,134,.65)}.alert{margin:0 0 18px;padding:11px 13px;border:1px solid rgba(250,82,82,.4);border-radius:8px;background:rgba(250,82,82,.08);color:#ffa8a8;text-align:center;font-size:12px}
+@media(max-width:540px){.login-page{padding:20px}.auth-form-wrap{padding:24px 8px}.auth-brand h1{font-size:23px}.auth-logo{width:42px;height:42px}}
+
+.auth-subtitle{margin:6px 0 24px;color:#828282;text-align:center;font-size:13px}
+.auth-form-wrap h2{margin:0;color:#f8f9fa;text-align:center;font:600 22px Montserrat,Inter,sans-serif}
+.auth-field{display:grid!important;gap:8px!important;margin-bottom:18px}
+.auth-field>span:first-child{color:#f1f3f5;font-size:13px;font-weight:500}
+.auth-field i{color:#fa5252;font-style:normal}
+.auth-field input{box-sizing:border-box;width:100%;height:44px;padding:0 13px;border:1px solid #424242;border-radius:8px;background:#242424;color:#f8f9fa;outline:0;font:14px Montserrat,Inter,sans-serif}
+.auth-field input:focus{border-color:#22b8cf;box-shadow:0 0 0 2px rgba(34,184,207,.16)}
+.auth-field input::placeholder{color:#828282}
+.password-field{position:relative;display:block}
+.password-field input{padding-right:48px}
+.password-field button{position:absolute;top:50%;right:7px;display:grid;width:34px;height:34px;padding:0;transform:translateY(-50%);place-items:center;border:0;border-radius:6px;background:transparent;color:#828282;cursor:pointer}
+.password-field button:hover{background:#ffffff0a;color:#f8f9fa}
+.password-field svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.password-field .eye-closed{display:none}
+.password-field button[aria-pressed="true"] .eye-open{display:none}
+.password-field button[aria-pressed="true"] .eye-closed{display:block}

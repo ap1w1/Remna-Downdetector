@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#161b22">
+  <title>Вход — RemnaDownDetector</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
+  <link rel="stylesheet" href="/static/app.css?v=20261009-1">
+  <link rel="stylesheet" href="/static/login.css?v=20261010-1">
+</head>
+<body class="login-page">
+  <main class="auth-layout">
+    <div class="auth-brand" aria-label="RemnaDownDetector">
+      <img class="auth-logo" src="/static/logo.svg?v=20261011-1" alt="">
+      <h1><span>Remna</span><b>Down</b></h1>
+    </div>
+
+    <section class="auth-form-wrap" aria-labelledby="auth-title">
+      <h2 id="auth-title">Вход в панель</h2>
+      <p class="auth-subtitle">Мониторинг нод Remnawave</p>
+
+      {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+
+      <form method="post" action="/login" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+
+        <label class="auth-field">
+          <span>Имя пользователя <i>*</i></span>
+          <input
+            name="username"
+            placeholder="Имя пользователя"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            required
+            autofocus
+          >
+        </label>
+
+        <label class="auth-field">
+          <span>Пароль <i>*</i></span>
+          <span class="password-field">
+            <input
+              id="password"
+              name="password"
+              placeholder="Ваш пароль"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+            <button id="password-toggle" type="button" aria-label="Показать пароль" aria-pressed="false">
+              <svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.8"/></svg>
+              <svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 3 18 18M10.7 6.1A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a14.4 14.4 0 0 1-2.1 2.8M6.2 6.2C3.8 8 2.5 12 2.5 12s3.5 6 9.5 6a9.7 9.7 0 0 0 3.1-.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>
+            </button>
+          </span>
+        </label>
+
+        <button class="auth-submit" type="submit">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
+          <span>Войти</span>
+        </button>
+      </form>
+    </section>
+  </main>
+  <script src="/static/login.js?v=20261009-1"></script>
+</body>
+</html>

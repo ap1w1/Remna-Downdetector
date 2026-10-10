@@ -1,0 +1,246 @@
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/montserrat-cyrillic.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+1C80-1C8A, U+20B4, U+2116;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/fonts/montserrat-latin.woff2") format("woff2");
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20AC, U+2122;
+}
+
+@font-face {
+  font-family: "Unbounded";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/static/fonts/unbounded-cyrillic.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+1C80-1C8A, U+20B4, U+2116;
+}
+
+@font-face {
+  font-family: "Unbounded";
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url("/static/fonts/unbounded-latin.woff2") format("woff2");
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20AC, U+2122;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/fira-mono-cyrillic-400.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+1C80-1C8A, U+20B4, U+2116;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/fonts/fira-mono-latin-400.woff2") format("woff2");
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20AC, U+2122;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/fira-mono-cyrillic-500.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+1C80-1C8A, U+20B4, U+2116;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/static/fonts/fira-mono-latin-500.woff2") format("woff2");
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20AC, U+2122;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/fira-mono-cyrillic-700.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+1C80-1C8A, U+20B4, U+2116;
+}
+
+@font-face {
+  font-family: "Fira Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/static/fonts/fira-mono-latin-700.woff2") format("woff2");
+  unicode-range: U+0000-024F, U+1E00-1EFF, U+2000-206F, U+20AC, U+2122;
+}
+
+:root {
+  color-scheme: dark;
+  --rw-dark-0: #c9d1d9;
+  --rw-dark-1: #b1bac4;
+  --rw-dark-2: #8b949e;
+  --rw-dark-3: #6e7681;
+  --rw-dark-4: #484f58;
+  --rw-dark-5: #30363d;
+  --rw-dark-6: #21262d;
+  --rw-dark-7: #161b22;
+  --rw-dark-8: #0d1117;
+  --rw-dark-9: #010409;
+  --rw-white: #f0f3f6;
+  --rw-cyan: #22d3ee;
+  --rw-cyan-dim: rgba(34, 211, 238, 0.12);
+  --rw-teal: #2dd4bf;
+  --rw-teal-dim: rgba(45, 212, 191, 0.12);
+  --rw-indigo: #818cf8;
+  --rw-indigo-dim: rgba(99, 102, 241, 0.12);
+  --rw-violet: #a78bfa;
+  --rw-violet-dim: rgba(139, 92, 246, 0.12);
+  --rw-yellow: #fbbf24;
+  --rw-yellow-dim: rgba(245, 158, 11, 0.12);
+  --rw-red: #f87171;
+  --rw-red-dim: rgba(239, 68, 68, 0.12);
+  --rw-border: rgba(255, 255, 255, 0.08);
+  --rw-border-strong: rgba(255, 255, 255, 0.14);
+  --rw-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  --rw-radius-sm: 6px;
+  --rw-radius-md: 8px;
+  --rw-radius-lg: 16px;
+  --font-ui: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Fira Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--rw-dark-8);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--rw-dark-8);
+  color: var(--rw-white);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+select,
+input[type="checkbox"] {
+  cursor: pointer;
+}
+
+button {
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--rw-dark-4);
+  border-radius: var(--rw-radius-md);
+  outline: none;
+  background: var(--rw-dark-6);
+  color: var(--rw-white);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--rw-dark-2);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: rgba(34, 211, 238, 0.7);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.12);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(34, 211, 238, 0.75);
+  outline-offset: 2px;
+}
+
+svg {
+  display: block;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.muted,
+.hint {
+  color: var(--rw-dark-2);
+}
+
+.hint {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.empty {
+  display: grid;
+  min-height: 120px;
+  place-items: center;
+  padding: 24px;
+  color: var(--rw-dark-2);
+  text-align: center;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--rw-dark-4);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rw-dark-3);
+  background-clip: padding-box;
+}

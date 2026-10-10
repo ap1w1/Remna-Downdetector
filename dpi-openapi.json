@@ -1,0 +1,1118 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DPI//Checker Public API",
+    "version": "1.1.0",
+    "description": "Checks whether VPN keys, IPs/domains and MTProto proxies are reachable from inside censored networks,\nusing residential points of presence in Russia, China, Iran and Turkmenistan.\n\nAll checks are asynchronous: a POST queues the job and returns an id; the result arrives either by\npolling (`GET /checks/{id}`), by long-poll (`GET /checks/{id}/wait`) or by webhook (`callback_url`).\n\nAuthentication: `X-API-Key` header. The key is issued in the Telegram bot (Главное меню → API) or on\nthe website, and requires a deposit of at least $1. It can be restricted to a set of IPs.",
+    "contact": {
+      "url": "https://dpichecker.st/api/v1/docs"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://dpichecker.st/api/v1"
+    }
+  ],
+  "tags": [
+    {
+      "name": "checks",
+      "description": "One-off checks (VPN / IP / MTProto)."
+    },
+    {
+      "name": "scans",
+      "description": "Зонд (subnet blocking) and Шумные соседи (neighbour SNI scan)."
+    },
+    {
+      "name": "monitors",
+      "description": "Recurring checks that report on a schedule."
+    },
+    {
+      "name": "lookup",
+      "description": "Free look-ups: prices, blacklist, ASN, registry."
+    },
+    {
+      "name": "account",
+      "description": "Balance, quota and webhook settings."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
+    "parameters": {
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "description": "Retrying with the same key replays the original response instead of charging again (kept 24 h)."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error",
+          "code"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable message. May be reworded; do not match on it."
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "invalid_location",
+              "invalid_pops",
+              "too_many_resources",
+              "private_target",
+              "blacklisted",
+              "missing_api_key",
+              "invalid_api_key",
+              "ip_not_allowed",
+              "account_banned",
+              "api_not_unlocked",
+              "insufficient_balance",
+              "not_found",
+              "not_cancellable",
+              "idempotency_conflict",
+              "idempotency_in_flight",
+              "rate_limited",
+              "quota_exceeded",
+              "maintenance",
+              "bot_unavailable",
+              "internal"
+            ],
+            "description": "Stable machine-readable error code."
+          },
+          "retry_after": {
+            "type": "integer",
+            "description": "Seconds to wait (429 only)."
+          },
+          "rejected": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The offending inputs, when the error is about specific ones."
+          }
+        }
+      },
+      "Check": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "active",
+              "completed",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "check_type": {
+            "type": "string",
+            "enum": [
+              "vpn",
+              "ip",
+              "mtproto"
+            ]
+          },
+          "location": {
+            "type": "string"
+          },
+          "usd_cost": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "api",
+              "web",
+              "bot",
+              "watcher",
+              "inline"
+            ]
+          },
+          "selected_pop_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "resource_count": {
+            "type": "integer"
+          },
+          "progress": {
+            "type": "object",
+            "description": "How much of the (resources × PoPs) matrix is done.",
+            "properties": {
+              "done": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "percent": {
+                "type": "integer"
+              }
+            }
+          },
+          "estimated_max_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "callback_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "results": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/pops": {
+      "get": {
+        "tags": [
+          "lookup"
+        ],
+        "summary": "Available points of presence.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "russia",
+                "china",
+                "iran",
+                "turkmenistan"
+              ]
+            }
+          },
+          {
+            "name": "healthy",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Only PoPs that are up right now."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PoP list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pops": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "integer"
+                          },
+                          "location": {
+                            "type": "string"
+                          },
+                          "region": {
+                            "type": "string"
+                          },
+                          "operator": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "is_healthy": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pops/optimal": {
+      "get": {
+        "tags": [
+          "lookup"
+        ],
+        "summary": "The bot's own «Оптимальный выбор» PoP set.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "russia",
+                "china",
+                "iran",
+                "turkmenistan"
+              ],
+              "default": "russia"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recommended PoP ids.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string"
+                    },
+                    "pop_ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The bot backend is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tariffs": {
+      "get": {
+        "tags": [
+          "lookup"
+        ],
+        "summary": "Current prices.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Prices per location and check type.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/profile": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Balance, totals and this key’s state.",
+        "responses": {
+          "200": {
+            "description": "Profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bad key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quota": {
+      "get": {
+        "tags": [
+          "account"
+        ],
+        "summary": "Remaining free allowances.",
+        "responses": {
+          "200": {
+            "description": "Quota.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/blacklist/check": {
+      "get": {
+        "tags": [
+          "lookup"
+        ],
+        "summary": "Would this target be refused as blacklisted?",
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verdict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resource": {
+                      "type": "string"
+                    },
+                    "blacklisted": {
+                      "type": "boolean"
+                    },
+                    "entry": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing resource.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ip/{ip}": {
+      "get": {
+        "tags": [
+          "lookup"
+        ],
+        "summary": "ASN, org and country for an IP.",
+        "parameters": [
+          {
+            "name": "ip",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bgp",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Also fetch a BGP connectivity snapshot (slower)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lookup result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cheremsha": {
+      "get": {
+        "tags": [
+          "lookup"
+        ],
+        "summary": "RKN registry / CDN lookup («Черемша»).",
+        "security": [],
+        "parameters": [
+          {
+            "name": "resource",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "IP or domain; up to 20, comma-separated."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registry verdicts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checks": {
+      "get": {
+        "tags": [
+          "checks"
+        ],
+        "summary": "List your checks (or probe/noisy scans).",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "check",
+                "probe",
+                "noisy"
+              ],
+              "default": "check"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "check_type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "vpn",
+                "ip",
+                "mtproto"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checks/estimate": {
+      "post": {
+        "tags": [
+          "checks"
+        ],
+        "summary": "Price a check without paying for it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "check_type",
+                  "location",
+                  "pop_ids"
+                ],
+                "properties": {
+                  "check_type": {
+                    "type": "string",
+                    "enum": [
+                      "vpn",
+                      "ip",
+                      "mtproto"
+                    ]
+                  },
+                  "location": {
+                    "type": "string",
+                    "enum": [
+                      "russia",
+                      "china",
+                      "iran",
+                      "turkmenistan"
+                    ]
+                  },
+                  "pop_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1,
+                    "description": "See GET /pops and GET /pops/optimal."
+                  },
+                  "callback_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS URL that receives a signed webhook when the job finishes. Optional."
+                  },
+                  "resources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "keys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "subscription_url": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quote.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checks/parse": {
+      "post": {
+        "tags": [
+          "checks"
+        ],
+        "summary": "Run the bot's parsers over pasted text without queueing anything.",
+        "description": "Tells you which keys/resources are understood, which are dropped and why — run this before paying.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "check_type"
+                ],
+                "properties": {
+                  "check_type": {
+                    "type": "string",
+                    "enum": [
+                      "vpn",
+                      "ip",
+                      "mtproto"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "Raw pasted text (keys, links, a subscription URL, one per line)."
+                  },
+                  "resources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Alternative to `text`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Parse result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The bot backend is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checks/vpn": {
+      "post": {
+        "tags": [
+          "checks"
+        ],
+        "summary": "Check VPN keys / a subscription.",
+        "description": "Debits the balance immediately and queues the check. Supply an `Idempotency-Key` header to make retries safe.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "location",
+                  "pop_ids"
+                ],
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "enum": [
+                      "russia",
+                      "china",
+                      "iran",
+                      "turkmenistan"
+                    ]
+                  },
+                  "pop_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1,
+                    "description": "See GET /pops and GET /pops/optimal."
+                  },
+                  "callback_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS URL that receives a signed webhook when the job finishes. Optional."
+                  },
+                  "keys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "VLESS/VMess/Trojan/Shadowsocks/Hysteria2 links."
+                  },
+                  "subscription_url": {
+                    "type": "string",
+                    "description": "Subscription link; fetched and expanded like the bot does."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "check_id": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "pending"
+                    },
+                    "estimated_cost": {
+                      "type": "number"
+                    },
+                    "estimated_max_minutes": {
+                      "type": "integer"
+                    },
+                    "balance": {
+                      "type": "number",
+                      "description": "Balance after the debit."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid location, PoPs or resources.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient balance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict or still in flight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Maintenance mode.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checks/ip": {
+      "post": {
+        "tags": [
+          "checks"
+        ],
+        "summary": "Check IPs / domains.",
+        "description": "Debits the balance immediately and queues the check. Supply an `Idempotency-Key` header to make retries safe.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "location",
+                  "pop_ids"
+                ],
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "enum": [
+                      "russia",
+                      "china",
+                      "iran",
+                      "turkmenistan"
+                    ]
+                  },
+                  "pop_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1,
+                    "description": "See GET /pops and GET /pops/optimal."
+                  },
+                  "callback_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS URL that receives a signed webhook when the job finishes. Optional."
+                  },
+                  "resources": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Public IPs and/or domains (max 50)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "check_id": {
+                      "type": "integer"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "pending"
+                    },
+                    "estimated_cost": {
+                      "type": "number"
+                    },
+                    "estimated_max_minutes": {
+                      "type": "integer"
+                    },
+                    "balance": {
+                      "type": "number",
+                      "description": "Balance after the debit."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid location, PoPs or resources.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient balance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency-Key conflict or still in flight.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Maintenance mode.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checks/mtproto": {
+      "post": {
+        "tags": [
+          "checks"
+        ],
+        "summary": "Check MTProto proxies.",
+        "description": "Debits the balance immediately and queues the check. Supply an `Idempotency-Key` header to make retries safe.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "location",
+                  "pop_ids"
+                ],
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "enum": [
+                      "russia",
+                      "china",
+                      "iran",
+                      "turkmenistan"
+                    ]
+                  },
+                  "pop_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "minItems": 1,
+                    "description": "See GET /pops and GET /pops/optimal."
+                  },
+                  "callback_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "HTTPS URL that receives a signed webhook when the job finishes. Opt
