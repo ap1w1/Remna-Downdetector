@@ -9,7 +9,7 @@
   <title>RemnaDownDetector</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
   <link rel="stylesheet" href="/static/app.css?v=20261009-2">
-  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-31">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-32">
 </head>
 <body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
   <div class="app-shell">
@@ -65,6 +65,10 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
         </button>
         <div class="topbar-spacer"></div>
+        <button id="version-button" class="version-button" type="button" title="Версия RemnaDown" aria-label="Версия RemnaDown">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/></svg>
+          <span id="current-version">—</span>
+        </button>
         <button id="sound-toggle" class="icon-button" type="button" title="Звуковые уведомления" aria-label="Включить звуковые уведомления" aria-pressed="false">
           <svg class="sound-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a4 4 0 0 1 0 6M17.5 6.5a8 8 0 0 1 0 11"/></svg>
           <svg class="sound-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5ZM16 10l5 5M21 10l-5 5"/></svg>
@@ -72,10 +76,6 @@
         <a class="icon-button community-link github-link" href="https://github.com/ap1w1/Remna-Downdetector" target="_blank" rel="noopener noreferrer" title="GitHub" aria-label="Открыть GitHub проекта">
           <img src="/static/github.svg?v=20261011-1" alt="">
         </a>
-        <button id="version-button" class="version-button" type="button" title="Версия RemnaDown" aria-label="Версия RemnaDown">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
-          <span id="current-version">—</span>
-        </button>
         <a class="icon-button community-link telegram-link" href="https://t.me/remnadown" target="_blank" rel="noopener noreferrer" title="Telegram" aria-label="Открыть Telegram проекта">
           <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M23.91 3.79 20.3 20.82c-.27 1.2-.98 1.49-1.98.93l-5.5-4.05-2.65 2.55c-.29.29-.54.54-1.11.54l.39-5.6L19.65 6c.44-.39-.1-.61-.68-.22L6.36 13.72.93 12.02c-1.18-.37-1.2-1.18.25-1.75L22.4 2.09c.98-.36 1.84.22 1.51 1.7Z"/></svg>
         </a>
