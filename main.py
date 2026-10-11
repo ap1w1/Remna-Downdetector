@@ -71,6 +71,7 @@ security = HTTPBasic(auto_error=False)
 login_attempts: dict[str, deque[float]] = defaultdict(deque)
 ip_rotation_tasks: set[str] = set()
 workflow_tasks: set[str] = set()
+host_hide_tasks: set[str] = set()
 icon_cache = IconCache(
     Path(settings.database_path).expanduser().resolve().parent / "icon-cache",
     logger,
@@ -156,7 +157,7 @@ def init_db() -> None:
                 ("temp_user_uuid", "TEXT NOT NULL DEFAULT ''"),
                 ("context", "TEXT NOT NULL DEFAULT '{}'"),
             ],
-            "node_state": [("is_unavailable", "INTEGER NOT NULL DEFAULT 0"), ("cpu_alert", "INTEGER NOT NULL DEFAULT 0"), ("ram_alert", "INTEGER NOT NULL DEFAULT 0"), ("rx_alert", "INTEGER NOT NULL DEFAULT 0"), ("tx_alert", "INTEGER NOT NULL DEFAULT 0"), ("baseline_online", "REAL")],
+            "node_state": [("is_unavailable", "INTEGER NOT NULL DEFAULT 0"), ("cpu_alert", "INTEGER NOT NULL DEFAULT 0"), ("ram_alert", "INTEGER NOT NULL DEFAULT 0"), ("rx_alert", "INTEGER NOT NULL DEFAULT 0"), ("tx_alert", "INTEGER NOT NULL DEFAULT 0"), ("baseline_online", "REAL"), ("host_hidden", "INTEGER NOT NULL DEFAULT 0")],
         }
         migrations["node_settings"].append(("dpi_squad_uuids", "TEXT NOT NULL DEFAULT '[]'"))
         for table, columns in migrations.items():
@@ -409,7 +410,7 @@ async def telegram_notify(category: str, message: str, event_type: str = "") -> 
 
 
 def event_message(event: str, node: dict[str, Any], sample: dict[str, Any]) -> str:
-    labels = {"node.unavailable": "🔴 Нода недоступна", "node.available": "🟢 Нода снова доступна", "node.online_drop": "🟠 Падение онлайна", "node.online_recovered": "🟢 Онлайн восстановлен"}
+    labels = {"node.unavailable": "🔴 Нода недоступна", "node.available": "🟢 Нода снова доступна", "node.online_drop": "🟠 Падение онлайна", "node.online_recovered": "🟢 Онлайн восстановлен", "node.host_hidden": "🙈 Host скрыт"}
     return f"<b>{labels.get(event, event)}</b>\nНода: <b>{html.escape(str(node['name']))}</b>\nАдрес: <code>{html.escape(str(node.get('address', '')))}</code>\nОнлайн: {int(sample.get('online', 0))}"
 
 
@@ -483,7 +484,8 @@ async def process_node(node: dict[str, Any]) -> None:
             alerts[name] = int(active)
             if active and not was_alert:
                 resource_events.append(f"node.{name}_threshold")
-        db.execute("INSERT INTO node_state(node_uuid,is_down,bad_count,good_count,is_unavailable,cpu_alert,ram_alert,rx_alert,tx_alert,baseline_online,changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(node_uuid) DO UPDATE SET is_down=excluded.is_down,bad_count=excluded.bad_count,good_count=excluded.good_count,is_unavailable=excluded.is_unavailable,cpu_alert=excluded.cpu_alert,ram_alert=excluded.ram_alert,rx_alert=excluded.rx_alert,tx_alert=excluded.tx_alert,baseline_online=excluded.baseline_online,changed_at=CASE WHEN is_down!=excluded.is_down OR is_unavailable!=excluded.is_unavailable THEN excluded.changed_at ELSE changed_at END", (node["uuid"], int(is_down), bad_count, good_count, int(is_unavailable), alerts["cpu"], alerts["ram"], alerts["rx"], alerts["tx"], next_baseline, now))
+        host_hidden = int(state["host_hidden"]) if state else 0
+        db.execute("INSERT INTO node_state(node_uuid,is_down,bad_count,good_count,is_unavailable,cpu_alert,ram_alert,rx_alert,tx_alert,baseline_online,host_hidden,changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(node_uuid) DO UPDATE SET is_down=excluded.is_down,bad_count=excluded.bad_count,good_count=excluded.good_count,is_unavailable=excluded.is_unavailable,cpu_alert=excluded.cpu_alert,ram_alert=excluded.ram_alert,rx_alert=excluded.rx_alert,tx_alert=excluded.tx_alert,baseline_online=excluded.baseline_online,host_hidden=excluded.host_hidden,changed_at=CASE WHEN is_down!=excluded.is_down OR is_unavailable!=excluded.is_unavailable THEN excluded.changed_at ELSE changed_at END", (node["uuid"], int(is_down), bad_count, good_count, int(is_unavailable), alerts["cpu"], alerts["ram"], alerts["rx"], alerts["tx"], next_baseline, host_hidden, now))
         if event:
             db.execute("INSERT INTO events(node_uuid,event,payload,created_at) VALUES(?,?,?,?)", (node["uuid"], event, json.dumps(sample), now))
         for resource_event in resource_events:
@@ -511,6 +513,57 @@ async def process_node(node: dict[str, Any]) -> None:
         if chain and node["uuid"] not in workflow_tasks:
             workflow_tasks.add(node["uuid"])
             asyncio.create_task(run_action_chain(node, sample, chain, auto_dpi_pop_ids or None))
+    if is_unavailable and was_unavailable and not host_hidden and config:
+        chain = json.loads(config["action_chain"] or "[]")
+        hide_action = next((item for item in chain if item.get("type") == "hide_host" and item.get("enabled", True)), None)
+        if hide_action and hide_action.get("offline_5m", True) and state:
+            unavailable_since = datetime.fromisoformat(str(state["changed_at"]))
+            if datetime.now(timezone.utc) - unavailable_since >= timedelta(minutes=5):
+                schedule_hide_node_hosts(node["uuid"], "offline_5m")
+
+
+def schedule_hide_node_hosts(node_uuid: str, reason: str) -> None:
+    if node_uuid in host_hide_tasks:
+        return
+    host_hide_tasks.add(node_uuid)
+
+    async def run() -> None:
+        try:
+            await hide_node_hosts(node_uuid, reason)
+        except Exception:
+            logger.exception("Failed to hide hosts node=%s reason=%s", node_uuid, reason)
+        finally:
+            host_hide_tasks.discard(node_uuid)
+
+    asyncio.create_task(run())
+
+
+async def hide_node_hosts(node_uuid: str, reason: str) -> bool:
+    with closing(connect_db()) as db:
+        state = db.execute("SELECT host_hidden FROM node_state WHERE node_uuid=?", (node_uuid,)).fetchone()
+        node = db.execute("SELECT * FROM nodes WHERE uuid=?", (node_uuid,)).fetchone()
+    if not node or (state and state["host_hidden"]):
+        return False
+    hosts = await app.state.remna.hosts()
+    linked = [host for host in hosts if node_uuid in {str(item.get("uuid") if isinstance(item, dict) else item) for item in host.get("nodes", [])}]
+    if not linked:
+        raise ValueError("No Remnawave hosts are linked to the node")
+    changed = []
+    for host in linked:
+        if host.get("isDisabled"):
+            continue
+        host_uuid = str(host.get("uuid", ""))
+        if host_uuid:
+            await app.state.remna.set_host_disabled(host_uuid, True)
+            changed.append({"uuid": host_uuid, "remark": str(host.get("remark", "")), "address": str(host.get("address", ""))})
+    payload = {"reason": reason, "hosts": changed, "host_count": len(changed)}
+    with closing(connect_db()) as db:
+        db.execute("UPDATE node_state SET host_hidden=1 WHERE node_uuid=?", (node_uuid,))
+        db.execute("INSERT INTO events(node_uuid,event,payload,created_at) VALUES(?,?,?,?)", (node_uuid, "node.host_hidden", json.dumps(payload), utc_now()))
+        db.commit()
+    await send_webhooks("node.host_hidden", dict(node), payload)
+    await telegram_notify("events", f"<b>🙈 Host скрыт</b>\nНода: <b>{html.escape(node['name'])}</b>\nПричина: <code>{html.escape(reason)}</code>\nHost: {len(changed)}", "node.host_hidden")
+    return True
 
 
 def save_dpi(
@@ -776,6 +829,8 @@ async def run_action_chain(node: dict[str, Any], sample: dict[str, Any], chain: 
             if not action.get("enabled", True):
                 continue
             action_type = action.get("type")
+            if action_type == "hide_host":
+                continue
             payload = {"step": index + 1, "action": action_type, "status": "started"}
             with closing(connect_db()) as db:
                 db.execute("INSERT INTO events(node_uuid,event,payload,created_at) VALUES(?,?,?,?)", (node["uuid"], "rule.action_started", json.dumps(payload), utc_now()))
@@ -867,6 +922,13 @@ async def follow_dpi_check(row_id: int, provider_id: int) -> None:
                             logger.exception("Failed to delete temporary DPI user %s", row["temp_user_uuid"])
                 if row and row["automatic"] and result.get("status") == "completed" and dpi_result_unavailable(result):
                     asyncio.create_task(rotate_node_ip(app, row["node_uuid"]))
+                if row and result.get("status") == "completed" and dpi_result_unavailable(result):
+                    with closing(connect_db()) as config_db:
+                        config = node_config(config_db, row["node_uuid"])
+                        chain = json.loads(config["action_chain"] or "[]") if config else []
+                    hide_action = next((item for item in chain if item.get("type") == "hide_host" and item.get("enabled", True)), None)
+                    if hide_action and hide_action.get("dpi_blocked", True):
+                        schedule_hide_node_hosts(row["node_uuid"], "dpi_blocked")
                 if row:
                     with closing(connect_db()) as db:
                         node = db.execute("SELECT * FROM nodes WHERE uuid=?", (row["node_uuid"],)).fetchone()
@@ -1368,6 +1430,21 @@ async def online_meta(_: str = Depends(require_user)):
         await client.close()
 
 
+@app.get("/api/metrics/history")
+async def metrics_history(days: int = 1, nodes: str = "", _: str = Depends(require_user)):
+    days = max(1, min(days, 365))
+    requested = {item for item in nodes.split(",") if item}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with closing(connect_db()) as db:
+        available = [dict(row) for row in db.execute("SELECT uuid,name,country_code,address FROM nodes ORDER BY view_position,name")]
+        selected = [node for node in available if not requested or node["uuid"] in requested]
+        series = []
+        for node in selected:
+            rows = db.execute("SELECT online,cpu_percent,ram_percent,rx_bps,tx_bps,created_at FROM samples WHERE node_uuid=? AND created_at>=? ORDER BY id DESC LIMIT 2500", (node["uuid"], cutoff)).fetchall()
+            series.append({"node": node, "samples": [dict(row) for row in reversed(rows)]})
+    return {"days": days, "series": series}
+
+
 @app.get("/api/logs")
 async def app_logs(level: str = "all", query: str = "", _: str = Depends(require_user)):
     clauses, params = [], []
@@ -1407,7 +1484,7 @@ async def update_node_settings(node_uuid: str, body: NodeSettingsUpdate, request
         raise HTTPException(422, "Unsupported DPI location")
     if body.vless_mode not in {"manual", "remnawave", "temporary"}:
         raise HTTPException(422, "Unsupported VLESS source")
-    allowed_actions = {"dpi_ip", "dpi_vless", "rotate_ip", "replace_dns"}
+    allowed_actions = {"dpi_ip", "dpi_vless", "rotate_ip", "replace_dns", "hide_host"}
     if len(body.action_chain) > 12 or any(item.get("type") not in allowed_actions for item in body.action_chain):
         raise HTTPException(422, "Invalid action chain")
     enabled_actions = {
@@ -1819,6 +1896,13 @@ async def dpi_callback(token: str, request: Request):
             logger.exception("Failed to delete temporary DPI user %s", row["temp_user_uuid"])
     if row["automatic"] and result.get("status") == "completed" and dpi_result_unavailable(result):
         asyncio.create_task(rotate_node_ip(request.app, row["node_uuid"]))
+    if result.get("status") == "completed" and dpi_result_unavailable(result):
+        with closing(connect_db()) as config_db:
+            config = node_config(config_db, row["node_uuid"])
+            chain = json.loads(config["action_chain"] or "[]") if config else []
+        hide_action = next((item for item in chain if item.get("type") == "hide_host" and item.get("enabled", True)), None)
+        if hide_action and hide_action.get("dpi_blocked", True):
+            schedule_hide_node_hosts(row["node_uuid"], "dpi_blocked")
     return {"ok": True}
 
 

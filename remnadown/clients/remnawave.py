@@ -497,6 +497,13 @@ class RemnawaveClient:
         payload = response.json().get("response", [])
         return payload if isinstance(payload, list) else []
 
+    async def set_host_disabled(self, host_uuid: str, disabled: bool) -> None:
+        response = await self.client.patch(
+            "/api/hosts",
+            json={"uuid": host_uuid, "isDisabled": disabled},
+        )
+        response.raise_for_status()
+
     async def infra_providers(self) -> list[dict[str, Any]]:
         response = await self.client.get("/api/infra-billing/providers")
         response.raise_for_status()

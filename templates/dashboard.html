@@ -9,7 +9,7 @@
   <title>RemnaDownDetector</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
   <link rel="stylesheet" href="/static/app.css?v=20261009-2">
-  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-32">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-33">
 </head>
 <body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
   <div class="app-shell">
@@ -63,6 +63,9 @@
       <header class="topbar">
         <button id="menu-toggle" class="icon-button menu-toggle" type="button" aria-label="Открыть меню">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <button class="nav-item" type="button" data-view="metrics">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V6M4 18h16M7 14l3-4 3 2 4-6"/></svg><span>История метрик</span>
         </button>
         <div class="topbar-spacer"></div>
         <button id="version-button" class="version-button" type="button" title="Версия RemnaDown" aria-label="Версия RemnaDown">
@@ -125,6 +128,18 @@
           </div>
 
           <div id="nodes" class="nodes-list"><div class="empty">Загрузка нод…</div></div>
+        </section>
+
+        <section id="metrics" class="view">
+          <div class="page-heading"><div class="toolbar-heading"><span class="theme-icon cyan"><svg viewBox="0 0 24 24"><path d="M4 18V6M4 18h16M7 14l3-4 3 2 4-6"/></svg></span><div><h1>История метрик</h1><p>Сравнение показателей всех или выбранных нод</p></div></div></div>
+          <div class="metrics-toolbar panel-surface">
+            <label><span>Метрика</span><select id="metrics-kind"><option value="online">Онлайн</option><option value="cpu_percent">CPU</option><option value="ram_percent">RAM</option><option value="rx_bps">RX</option><option value="tx_bps">TX</option></select></label>
+            <label><span>Период</span><select id="metrics-days"><option value="1">24 часа</option><option value="3">3 дня</option><option value="7">7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option></select></label>
+            <details class="region-picker metrics-node-picker"><summary><span>Ноды</span><b id="metrics-node-count">Все ноды</b></summary><div class="region-picker-popover"><div id="metrics-node-options" class="check-list compact"></div></div></details>
+          </div>
+          <div id="metrics-summary" class="summary-grid"></div>
+          <article class="detail-card chart-card metrics-chart-card"><div class="chart-head"><div class="card-heading"><span class="theme-icon cyan"><svg viewBox="0 0 24 24"><path d="M4 18V6M4 18h16M7 14l3-4 3 2 4-6"/></svg></span><div><h3 id="metrics-chart-title">Онлайн</h3><p>Наведите курсор для просмотра точного значения</p></div></div><div id="metrics-chart-caption" class="online-chart-caption"></div></div><div id="metrics-chart" class="interactive-chart"><div class="empty">Выберите период и ноды</div></div></article>
+          <div id="metrics-node-cards" class="online-node-grid"></div>
         </section>
 
         <section id="events" class="view">
@@ -370,6 +385,8 @@
             <label class="workflow-step"><span class="workflow-order">2</span><span class="workflow-copy"><b>Проверить VLESS ключ</b><small>Получить реальный VLESS URI и проверить подключение</small></span><input type="checkbox" value="dpi_vless"><i></i></label>
             <label class="workflow-step"><span class="workflow-order">3</span><span class="workflow-copy"><b>Переключить на резервный IP</b><small>Использовать первый доступный адрес из пула ноды</small></span><input type="checkbox" value="rotate_ip"><i></i></label>
             <label class="workflow-step"><span class="workflow-order">4</span><span class="workflow-copy"><b>Обновить связанные домены</b><small>Заменить адрес в настроенных DNS-интеграциях</small></span><input type="checkbox" value="replace_dns"><i></i></label>
+            <label class="workflow-step"><span class="workflow-order">5</span><span class="workflow-copy"><b>Скрывать Host</b><small>Отключить связанные Host в Remnawave при аварии</small></span><input type="checkbox" value="hide_host"><i></i></label>
+            <div id="hide-host-options" class="workflow-conditions" hidden><span>Условия скрытия</span><label><input id="hide-host-offline" type="checkbox" checked><i></i><span><b>Нода офлайн более 5 минут</b><small>Host будет отключён после непрерывной недоступности</small></span></label><label><input id="hide-host-dpi" type="checkbox" checked><i></i><span><b>DPI Checker подтвердил блокировку</b><small>Host будет отключён после завершения проверки</small></span></label></div>
           </div></fieldset>
           <div class="automation-options">
             <fieldset id="vless-config-block" class="automation-section vless-source-card"><legend>VLESS для DPI Checker</legend><label>Источник ключа<select name="vless_mode" id="vless-mode"><option value="manual">Указать VLESS ключ</option><option value="remnawave">Взять у пользователя Remnawave</option><option value="temporary">Создать временного пользователя</option></select></label><label data-vless-field="manual">VLESS ключ<input name="vless_key" type="password" placeholder="vless://… или оставить без изменения"></label><label data-vless-field="remnawave">Username в Remnawave<input name="vless_username" placeholder="Пользователь с доступом к ноде"></label><div class="vless-temporary-note" data-vless-field="temporary"><b>Настраивать ничего не нужно</b><span>Система создаст пользователя <code>dpi_checker_*</code>, получит VLESS ключ и удалит пользователя после проверки.</span></div></fieldset>
@@ -396,6 +413,6 @@
   <dialog id="update-dialog" class="compact-dialog update-dialog"><div class="dialog-header"><div class="dialog-title"><h2>Обновление RemnaDown</h2><p id="update-version-summary">Проверка версии…</p></div><button class="dialog-close" type="button" data-close-update aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></svg></button></div><div class="update-dialog-body"><p id="update-dialog-text">У вас установлена актуальная версия.</p><pre><code>cd /opt/remnadown
 sudo bash update.sh</code></pre><p>Скрипт загрузит изменения, пересоберёт контейнер и проверит работоспособность сервиса.</p></div><div class="dialog-actions"><button class="primary-button" type="button" data-close-update>Понятно</button></div></dialog>
   <dialog id="dpi-token-dialog" class="compact-dialog dpi-token-dialog"><form method="dialog" id="dpi-token-form"><div class="dialog-header"><div class="dialog-title"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>API-токен DPI Checker</h2><p>Новый токен будет сохранён после подтверждения</p></div></div><button class="dialog-close" type="button" data-close-dpi-token aria-label="Закрыть">×</button></div><div class="dpi-token-dialog-body"><label>API-токен<input form="app-settings" name="dpi_api_key" type="password" placeholder="Введите новый токен" autocomplete="new-password"></label></div><div class="dialog-actions"><button class="secondary-button dialog-secondary-button" type="button" data-close-dpi-token>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
-  <script src="/static/app.js?v=20261011-31"></script>
+  <script src="/static/app.js?v=20261011-33"></script>
 </body>
 </html>

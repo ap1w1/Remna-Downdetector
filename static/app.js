@@ -15,8 +15,9 @@ const dpiEnabled = document.body.dataset.dpiEnabled === "true";
 const REGIONS = {
   russia: { name: "Россия", code: "RU" },
 };
-const WEBHOOK_EVENTS = ["node.unavailable", "node.available", "node.online_drop", "node.online_recovered", "node.cpu_threshold", "node.ram_threshold", "node.rx_threshold", "node.tx_threshold", "node.ip_changed", "domain.ip_changed", "dpi.check_started", "dpi.check_completed", "dpi.balance_low", "rule.action_started", "rule.action_completed"];
+const WEBHOOK_EVENTS = ["node.unavailable", "node.available", "node.online_drop", "node.online_recovered", "node.host_hidden", "node.cpu_threshold", "node.ram_threshold", "node.rx_threshold", "node.tx_threshold", "node.ip_changed", "domain.ip_changed", "dpi.check_started", "dpi.check_completed", "dpi.balance_low", "rule.action_started", "rule.action_completed"];
 const TELEGRAM_EVENTS = [...WEBHOOK_EVENTS, "auth.login", "auth.failed"];
+$("#event-filter")?.insertAdjacentHTML("beforeend", '<option value="node.host_hidden">Host скрыт</option>');
 
 let state = { nodes: [], events: [], webhooks: [], settings: {}, integration_alerts: [] };
 let selected = null;
@@ -44,6 +45,8 @@ let pendingActivateId = null;
 let notificationAudioContext = null;
 let lastIntegrationAlert = sessionStorage.getItem("remnadown-integration-alert") || "";
 let activeScheduleDay = 0;
+let metricsData = { series: [] };
+let metricsSelected = new Set();
 
 const esc = (value) => String(value ?? "").replace(
   /[&<>"']/g,
@@ -371,6 +374,7 @@ const EVENT_META = {
     className: "recovered",
     icon: '<svg viewBox="0 0 24 24"><path d="M4 17h5v-5M20 7h-5v5M9 12l-5 5M15 12l5-5"/></svg>',
   },
+  "node.host_hidden": { label: "Host скрыт", className: "drop", icon: '<svg viewBox="0 0 24 24"><path d="M3 12s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6Z"/><path d="m4 4 16 16"/></svg>' },
   "node.ip_changed": {
     label: "IP ноды изменён",
     className: "available",
@@ -682,6 +686,7 @@ function syncAutomationOptions() {
   const dpiEnabled = vlessEnabled || $('#node-action-chain input[value="dpi_ip"]').checked;
   $("#vless-config-block").hidden = !vlessEnabled;
   $("#node-regions-block").hidden = !dpiEnabled;
+  $("#hide-host-options").hidden = !$('#node-action-chain input[value="hide_host"]').checked;
 }
 
 function populateNodeDetails(node, fillForm = false) {
@@ -724,7 +729,10 @@ function populateNodeDetails(node, fillForm = false) {
   form.vless_username.value = node.vless_username || "";
   syncVlessSource();
   const enabledActions = new Set((node.action_chain || []).filter((item) => item.enabled !== false).map((item) => item.type));
-  $$("input[type='checkbox']", $("#node-action-chain")).forEach((input) => { input.checked = enabledActions.has(input.value); });
+  $$(".workflow-step > input[type='checkbox']", $("#node-action-chain")).forEach((input) => { input.checked = enabledActions.has(input.value); });
+  const hideHost = (node.action_chain || []).find((item) => item.type === "hide_host") || {};
+  $("#hide-host-offline").checked = hideHost.offline_5m !== false;
+  $("#hide-host-dpi").checked = hideHost.dpi_blocked !== false;
   syncAutomationOptions();
   form.cpu_threshold.value = node.cpu_threshold || 0;
   form.ram_threshold.value = node.ram_threshold || 0;
@@ -780,6 +788,8 @@ async function load({ force = false } = {}) {
       settings: payload.settings && typeof payload.settings === "object" ? payload.settings : {},
       integration_alerts: Array.isArray(payload.integration_alerts) ? payload.integration_alerts : [],
     };
+    const metricChoices = $("#metrics-node-options");
+    if (metricChoices) metricChoices.innerHTML = state.nodes.map((node) => `<label><input type="checkbox" value="${esc(node.uuid)}" ${metricsSelected.has(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)} ${esc(node.name)}</span></label>`).join("");
     const integrationAlert = state.integration_alerts[0];
     if (integrationAlert && integrationAlert.id !== lastIntegrationAlert) {
       lastIntegrationAlert = integrationAlert.id;
@@ -1097,6 +1107,51 @@ async function loadDpi() {
   }
 }
 
+async function loadMetricsHistory() {
+  const days = Number($("#metrics-days").value || 1);
+  const query = new URLSearchParams({ days: String(days), nodes: [...metricsSelected].join(",") });
+  $("#metrics-chart").innerHTML = '<div class="empty">Загрузка истории…</div>';
+  try {
+    const response = await fetch(`/api/metrics/history?${query}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    metricsData = await response.json();
+    renderMetricsHistory();
+  } catch (error) {
+    $("#metrics-chart").innerHTML = `<div class="empty">Не удалось загрузить историю: ${esc(error.message)}</div>`;
+  }
+}
+
+function metricHistoryValue(sample, kind) {
+  const value = finite(sample[kind]);
+  if (value === null) return null;
+  return ["rx_bps", "tx_bps"].includes(kind) ? value * 8 / 1_000_000 : value;
+}
+
+function metricHistoryFormat(value, kind) {
+  if (value === null || !Number.isFinite(value)) return "—";
+  if (kind === "online") return compactNumber(Math.round(value));
+  if (["rx_bps", "tx_bps"].includes(kind)) return `${value.toFixed(value >= 10 ? 1 : 2)} Мбит/с`;
+  return `${value.toFixed(1)}%`;
+}
+
+function renderMetricsHistory() {
+  const kind = $("#metrics-kind").value;
+  const labels = { online: "Онлайн", cpu_percent: "CPU", ram_percent: "RAM", rx_bps: "RX", tx_bps: "TX" };
+  const series = (metricsData.series || []).map((item, index) => ({ ...item, color: ONLINE_COLORS[index % ONLINE_COLORS.length], points: (item.samples || []).map((sample) => [new Date(sample.created_at).getTime(), metricHistoryValue(sample, kind)]).filter(([, value]) => value !== null) })).filter((item) => item.points.length);
+  const points = series.flatMap((item) => item.points);
+  $("#metrics-chart-title").textContent = labels[kind] || kind;
+  $("#metrics-chart-caption").innerHTML = series.map((item) => `<span class="online-legend"><i style="background:${item.color}"></i>${esc(item.node.name)}</span>`).join("");
+  $("#metrics-node-cards").innerHTML = series.map((item) => `<article class="online-node-card">${flag(item.node.country_code)}<span><b>${esc(item.node.name)}</b><small>${esc(item.node.address)}</small></span><strong>${metricHistoryFormat(item.points.at(-1)[1], kind)}</strong></article>`).join("");
+  if (!points.length) { $("#metrics-chart").innerHTML = '<div class="empty">Нет данных за выбранный период</div>'; $("#metrics-summary").innerHTML = ""; return; }
+  const values = points.map(([, value]) => value), currentValues = series.map((item) => item.points.at(-1)[1]), currentTotal = currentValues.reduce((sum, value) => sum + value, 0), current = ["cpu_percent", "ram_percent"].includes(kind) ? currentTotal / Math.max(1, currentValues.length) : currentTotal, maximum = Math.max(...values), minimum = Math.min(...values);
+  $("#metrics-summary").innerHTML = `<article class="summary-card"><span>Сейчас</span><b>${metricHistoryFormat(current, kind)}</b></article><article class="summary-card"><span>Максимум</span><b>${metricHistoryFormat(maximum, kind)}</b></article><article class="summary-card"><span>Минимум</span><b>${metricHistoryFormat(minimum, kind)}</b></article>`;
+  const width = 1000, height = 300, margin = { top: 15, right: 18, bottom: 28, left: 78 }, max = Math.max(kind === "online" ? 1 : 100, maximum), min = kind === "online" ? 0 : Math.min(0, minimum), span = Math.max(1, max - min), minTime = Math.min(...points.map(([time]) => time)), maxTime = Math.max(...points.map(([time]) => time));
+  const xFor = (time) => margin.left + (time - minTime) * (width - margin.left - margin.right) / Math.max(1, maxTime - minTime), yFor = (value) => margin.top + (max - value) * (height - margin.top - margin.bottom) / span;
+  const grid = Array.from({ length: 5 }, (_, index) => { const value = max - index / 4 * span, y = yFor(value); return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 9}" y="${y + 3}" text-anchor="end">${esc(metricHistoryFormat(value, kind))}</text>`; }).join("");
+  const lines = series.map((item) => `<path class="online-node-line" style="stroke:${item.color}" d="${item.points.map(([time, value], index) => `${index ? "L" : "M"}${xFor(time).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>`).join("");
+  $("#metrics-chart").innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${grid}${lines}</svg>`;
+}
+
 async function loadLogs() {
   const query = $("#log-search").value.trim();
   const level = $("#log-level").value;
@@ -1210,6 +1265,7 @@ $$('.nav-item').forEach((button) => {
       Promise.all([loadDpiOverview(), loadDpi()]);
     }
     if (button.dataset.view === "logs") loadLogs();
+    if (button.dataset.view === "metrics") loadMetricsHistory();
     if (button.dataset.view === "domains") { activeDomainProvider = button.dataset.domainProvider || ""; loadDomains(); }
   });
 });
@@ -1229,6 +1285,9 @@ $("#country-filter").addEventListener("change", renderNodes);
 $("#node-sort").addEventListener("change", renderNodes);
 $("#event-search").addEventListener("input", renderEvents);
 $("#event-filter").addEventListener("change", renderEvents);
+$("#metrics-kind").addEventListener("change", renderMetricsHistory);
+$("#metrics-days").addEventListener("change", loadMetricsHistory);
+$("#metrics-node-options").addEventListener("change", () => { metricsSelected = new Set(checked("#metrics-node-options")); $("#metrics-node-count").textContent = metricsSelected.size ? `Выбрано: ${metricsSelected.size}` : "Все ноды"; loadMetricsHistory(); });
 $("#clear-events").addEventListener("click", async (event) => {
   if (!state.events.length) {
     toast("Событий для очистки нет");
@@ -1316,7 +1375,7 @@ $("#node-settings").addEventListener("submit", async (event) => {
     vless_mode: form.vless_mode.value,
     vless_key: form.vless_key.value.trim(),
     vless_username: form.vless_username.value.trim(),
-    action_chain: $$("input[type='checkbox']", $("#node-action-chain")).map((input) => ({ type: input.value, enabled: input.checked })),
+    action_chain: $$(".workflow-step > input[type='checkbox']", $("#node-action-chain")).map((input) => input.value === "hide_host" ? ({ type: input.value, enabled: input.checked, offline_5m: $("#hide-host-offline").checked, dpi_blocked: $("#hide-host-dpi").checked }) : ({ type: input.value, enabled: input.checked })),
     dpi_squad_uuids: [],
     auto_dns_replace: $('#node-action-chain input[value="replace_dns"]').checked,
     cpu_threshold: Number(form.cpu_threshold.value || 0), ram_threshold: Number(form.ram_threshold.value || 0),
