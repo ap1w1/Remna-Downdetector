@@ -255,8 +255,8 @@ EOF
 
 deploy(){
   info "Собираю Docker-образ..."
-  docker compose build app updater
-  docker compose up -d app updater
+  docker build --network=host -t remnadown-app:latest .
+  docker compose up -d app
   if [[ "$PROXY_MODE" == bundled-caddy ]]; then docker compose --profile bundled-proxy up -d caddy; fi
   if [[ "$PROXY_MODE" == system-caddy ]]; then configure_system_caddy; fi
   info "Ожидаю запуска приложения..."

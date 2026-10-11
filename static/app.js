@@ -35,7 +35,6 @@ let refreshTimer = null;
 let dpiOverview = { profile: {}, checks: [], pops: [], stats: [] };
 let onlineHours = 24;
 let onlineSelected = new Set();
-let eventNodeSelection = new Set();
 const ONLINE_COLORS = ["#2dd4bf", "#818cf8", "#fb7185", "#fbbf24", "#38bdf8", "#c084fc", "#4ade80", "#fb923c"];
 const dpiAvailable = () => dpiEnabled || Boolean(state.settings.dpi_api_configured);
 let domainData = [];
@@ -404,7 +403,6 @@ function renderEvents() {
   const events = state.events.filter((event) => (
     (!query || String(event.name || "").toLowerCase().includes(query))
     && (kind === "all" || event.event === kind)
-    && (!eventNodeSelection.size || eventNodeSelection.has(event.node_uuid))
   ));
   if ($("#events").classList.contains("active")) markEventsRead();
   else updateEventsBadge();
@@ -448,16 +446,6 @@ function render() {
   renderNodes();
   renderEvents();
   renderHooks();
-  const existingEventNodes = new Set(state.nodes.map((node) => node.uuid));
-  eventNodeSelection = new Set(
-    [...eventNodeSelection].filter((uuid) => existingEventNodes.has(uuid)),
-  );
-  $("#event-node-options").innerHTML = state.nodes.map((node) => `
-    <label><input type="checkbox" value="${esc(node.uuid)}" ${eventNodeSelection.has(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></label>
-  `).join("");
-  $("#event-node-count").textContent = eventNodeSelection.size
-    ? `Выбрано: ${eventNodeSelection.size}`
-    : "Все ноды";
   const current = checked("#dpi-node-options");
   $("#dpi-node-options").innerHTML = state.nodes.map((node) => `<label><input type="checkbox" value="${esc(node.uuid)}" ${current.includes(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></label>`).join("");
   updateDpiNodeCount();
@@ -1232,13 +1220,6 @@ $("#country-filter").addEventListener("change", renderNodes);
 $("#node-sort").addEventListener("change", renderNodes);
 $("#event-search").addEventListener("input", renderEvents);
 $("#event-filter").addEventListener("change", renderEvents);
-$("#event-node-options").addEventListener("change", () => {
-  eventNodeSelection = new Set(checked("#event-node-options"));
-  $("#event-node-count").textContent = eventNodeSelection.size
-    ? `Выбрано: ${eventNodeSelection.size}`
-    : "Все ноды";
-  renderEvents();
-});
 $("#clear-events").addEventListener("click", async (event) => {
   if (!state.events.length) {
     toast("Событий для очистки нет");
@@ -1606,26 +1587,6 @@ $("#events-list").addEventListener("click", (event) => {
   if (button) navigator.clipboard.writeText(button.dataset.copyJson).then(() => toast("JSON скопирован"));
 });
 
-$("#update-remnadown").addEventListener("click", async (event) => {
-  const warning = "Обновление загрузит новую версию и перезапустит RemnaDown. Несовместимые изменения могут нарушить работу панели. Продолжить?";
-  if (!window.confirm(warning)) return;
-  const button = event.currentTarget;
-  button.disabled = true;
-  button.classList.add("is-updating");
-  try {
-    const response = await fetch("/api/system/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ csrf_token: csrf }),
-    });
-    if (!response.ok) throw new Error(await jsonError(response));
-    toast("Обновление запущено. Панель будет перезапущена");
-  } catch (error) {
-    button.disabled = false;
-    button.classList.remove("is-updating");
-    toast(`Не удалось запустить обновление: ${error.message}`, true);
-  }
-});
 
 function syncSoundButton() {
   const enabled = localStorage.getItem("remnadown-sound") === "on";

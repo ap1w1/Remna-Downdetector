@@ -41,8 +41,6 @@ class Settings(BaseSettings):
     secure_cookies: bool = True
     webhook_allow_private_ips: bool = False
     webhook_timeout_seconds: float = 10.0
-    remnadown_update_command: str = "/opt/remnadown/update.sh"
-    remnadown_updater_url: str = "http://updater:8099/update"
     domain: str = ""
 
     @property

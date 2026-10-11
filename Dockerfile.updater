@@ -1,6 +1,0 @@
-FROM alpine:3.22
-RUN apk add --no-cache bash curl docker-cli docker-cli-compose git python3
-WORKDIR /workspace
-COPY updater.py /opt/remnadown-updater.py
-EXPOSE 8099
-CMD ["python3", "/opt/remnadown-updater.py"]

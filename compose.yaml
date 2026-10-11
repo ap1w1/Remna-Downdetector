@@ -16,20 +16,6 @@ services:
     cap_drop: [ALL]
     read_only: true
     tmpfs: [/tmp]
-  updater:
-    build:
-      context: .
-      dockerfile: Dockerfile.updater
-    container_name: remna-down-updater
-    restart: unless-stopped
-    environment:
-      UPDATE_TOKEN: ${APP_SECRET}
-      UPDATE_HEALTH_URL: http://app:8000/health
-    volumes:
-      - .:/workspace
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks: [web]
-    security_opt: [no-new-privileges:true]
   caddy:
     image: caddy:2.10-alpine
     container_name: remna-down-caddy
