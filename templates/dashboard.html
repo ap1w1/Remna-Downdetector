@@ -9,7 +9,7 @@
   <title>RemnaDownDetector</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
   <link rel="stylesheet" href="/static/app.css?v=20261009-2">
-  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-45">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-46">
 </head>
 <body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
   <div class="app-shell">
@@ -416,6 +416,6 @@
   <dialog id="update-dialog" class="compact-dialog update-dialog"><div class="dialog-header"><div class="dialog-title"><h2>Обновление RemnaDown</h2><p id="update-version-summary">Проверка версии…</p></div><button class="dialog-close" type="button" data-close-update aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></svg></button></div><div class="update-dialog-body"><p id="update-dialog-text">У вас установлена актуальная версия.</p><pre><code>cd /opt/remnadown
 sudo bash update.sh</code></pre><p>Скрипт загрузит изменения, пересоберёт контейнер и проверит работоспособность сервиса.</p></div><div class="dialog-actions"><button class="primary-button" type="button" data-close-update>Понятно</button></div></dialog>
   <dialog id="dpi-token-dialog" class="compact-dialog dpi-token-dialog"><form method="dialog" id="dpi-token-form"><div class="dialog-header"><div class="dialog-title"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>API-токен DPI Checker</h2><p>Новый токен будет сохранён после подтверждения</p></div></div><button class="dialog-close" type="button" data-close-dpi-token aria-label="Закрыть">×</button></div><div class="dpi-token-dialog-body"><label>API-токен<input form="app-settings" name="dpi_api_key" type="password" placeholder="Введите новый токен" autocomplete="new-password"></label></div><div class="dialog-actions"><button class="secondary-button dialog-secondary-button" type="button" data-close-dpi-token>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
-  <script src="/static/app.js?v=20261011-45"></script>
+  <script src="/static/app.js?v=20261011-46"></script>
 </body>
 </html>

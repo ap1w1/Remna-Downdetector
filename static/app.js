@@ -52,6 +52,8 @@ let metricsDateFrom = "";
 let metricsDateTo = "";
 let metricsLoadSequence = 0;
 let metricsLoadTimer = null;
+let metricsVisibleRange = null;
+let metricsEventsExpanded = false;
 let historyLoadSequence = 0;
 let chartInstanceSequence = 0;
 
@@ -912,7 +914,7 @@ function nearestChartPoint(points, target) {
   return points[low];
 }
 
-function renderTimeChart(container, inputSeries, formatValue, bounds = {}, markers = []) {
+function renderTimeChart(container, inputSeries, formatValue, bounds = {}, markers = [], onRangeChange = null) {
   const series = inputSeries.map((item, index) => ({ ...item, className: item.className || chartSeriesClass(index), points: item.points.filter(([timestamp, value]) => Number.isFinite(timestamp) && Number.isFinite(value)).sort((left, right) => left[0] - right[0]) })).filter((item) => item.points.length);
   const points = series.flatMap((item) => item.points);
   if (!points.length) return false;
@@ -977,6 +979,7 @@ function renderTimeChart(container, inputSeries, formatValue, bounds = {}, marke
   const setView = (start, end) => {
     [viewMinTime, viewMaxTime] = clampView(start, end);
     draw();
+    onRangeChange?.(viewMinTime, viewMaxTime, Math.abs(viewMinTime - fullMinTime) < 1 && Math.abs(viewMaxTime - fullMaxTime) < 1);
   };
 
   const zoom = (factor, anchor = (viewMinTime + viewMaxTime) / 2) => {
@@ -1052,6 +1055,7 @@ function renderTimeChart(container, inputSeries, formatValue, bounds = {}, marke
   $("[data-chart-zoom-out]", container).addEventListener("click", () => zoom(2));
   $("[data-chart-reset]", container).addEventListener("click", () => setView(fullMinTime, fullMaxTime));
   draw();
+  onRangeChange?.(viewMinTime, viewMaxTime, true);
   return true;
 }
 
@@ -1236,6 +1240,8 @@ async function loadMetricsHistory() {
   clearTimeout(metricsLoadTimer);
   metricsLoadTimer = null;
   const sequence = ++metricsLoadSequence;
+  metricsVisibleRange = null;
+  metricsEventsExpanded = false;
   const period = $("#metrics-days").value;
   const query = new URLSearchParams({ days: period === "custom" ? "1" : period, nodes: [...metricsSelected].join(","), include_events: $("#metrics-show-events").checked ? "true" : "false" });
   if (period === "custom" && metricsDateFrom && metricsDateTo) {
@@ -1278,12 +1284,18 @@ function renderMetricsEvents() {
   const enabled = $("#metrics-show-events").checked;
   panel.hidden = !enabled;
   if (!enabled) return;
-  const events = metricsData.events || [];
+  const events = (metricsData.events || []).filter((event) => {
+    if (!metricsVisibleRange) return true;
+    const timestamp = new Date(event.created_at).getTime();
+    return Number.isFinite(timestamp) && timestamp >= metricsVisibleRange[0] && timestamp <= metricsVisibleRange[1];
+  });
+  const visibleEvents = metricsEventsExpanded ? events : events.slice(0, 10);
   $("#metrics-events-count").textContent = String(events.length);
-  $("#metrics-events-list").innerHTML = events.length ? events.map((event) => {
+  $("#metrics-events-list").innerHTML = events.length ? visibleEvents.map((event) => {
     const meta = EVENT_META[event.event] || { label: event.event, className: "" };
     return `<details class="metrics-event-row ${esc(meta.className)}"><summary><span class="metrics-event-alert">!</span>${flag(event.country_code)}<span><b>${esc(meta.label)}</b><small>${esc(event.node_name)} · ${esc(event.node_address || "IP не указан")}</small></span><time>${esc(formatTime(event.created_at))}</time><i></i></summary><div class="metrics-event-json"><pre>${highlightedText(event.payload || "{}")}</pre></div></details>`;
-  }).join("") : '<div class="empty">За выбранный период событий нет</div>';
+  }).join("") + (events.length > 10 ? `<button class="metrics-events-more" type="button">${metricsEventsExpanded ? "Свернуть до 10" : `Показать остальные (${events.length - 10})`}</button>` : "") : '<div class="empty">За выбранный промежуток событий нет</div>';
+  $(".metrics-events-more", panel)?.addEventListener("click", () => { metricsEventsExpanded = !metricsEventsExpanded; renderMetricsEvents(); });
 }
 
 function renderMetricsHistory() {
@@ -1303,7 +1315,11 @@ function renderMetricsHistory() {
   const currentLabel = multiple ? `${averaged ? "Среднее" : "Всего"} ${historical ? "на конец" : "сейчас"}` : historical ? "На конец периода" : "Сейчас";
   $("#metrics-summary").innerHTML = `<article class="summary-card"><span>${currentLabel}</span><b>${metricHistoryFormat(current, kind)}</b></article><article class="summary-card"><span>${multiple ? "Максимум ноды" : "Максимум"}</span><b>${metricHistoryFormat(maximum, kind)}</b></article><article class="summary-card"><span>${multiple ? "Минимум ноды" : "Минимум"}</span><b>${metricHistoryFormat(minimum, kind)}</b></article>`;
   const markers = $("#metrics-show-events").checked ? (metricsData.events || []).map((event) => ({ timestamp: new Date(event.created_at).getTime(), label: `${event.node_name}: ${EVENT_META[event.event]?.label || event.event}` })).filter((event) => Number.isFinite(event.timestamp)) : [];
-  renderTimeChart($("#metrics-chart"), series, (value) => metricHistoryFormat(value, kind), ["cpu_percent", "ram_percent"].includes(kind) ? { min: 0, max: 100 } : { min: 0 }, markers);
+  renderTimeChart($("#metrics-chart"), series, (value) => metricHistoryFormat(value, kind), ["cpu_percent", "ram_percent"].includes(kind) ? { min: 0, max: 100 } : { min: 0 }, markers, (start, end, isFull) => {
+    metricsVisibleRange = isFull ? null : [start, end];
+    metricsEventsExpanded = false;
+    renderMetricsEvents();
+  });
 }
 
 async function loadLogs() {
