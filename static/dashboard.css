@@ -1499,6 +1499,27 @@ legend small {
   color: var(--rw-indigo);
 }
 
+.node-detail-dpi-button {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(139, 92, 246, .28);
+  border-radius: 9px;
+  background: rgba(139, 92, 246, .09);
+  color: var(--rw-white);
+  text-align: left;
+}
+.node-detail-dpi-button:hover { border-color: rgba(139, 92, 246, .5); background: rgba(139, 92, 246, .15); }
+.node-detail-dpi-button img { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 7px; }
+.node-detail-dpi-button span { display: grid; min-width: 0; flex: 1; gap: 2px; }
+.node-detail-dpi-button b { font-size: 11px; }
+.node-detail-dpi-button small { color: var(--rw-dark-2); font-size: 9px; }
+.node-detail-dpi-button > svg { width: 17px; height: 17px; fill: none; stroke: #a78bfa; stroke-width: 2; }
+
 .quick-metric svg {
   width: 15px;
   height: 15px;
@@ -2681,7 +2702,7 @@ legend small {
 /* DPI Checker workspace */
 .dpi-workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 0.72fr) minmax(420px, 1.28fr);
+  grid-template-columns: minmax(240px, .78fr) minmax(290px, 1fr) minmax(340px, 1.18fr);
   align-items: start;
   gap: 12px;
   margin-bottom: 12px;
@@ -2693,14 +2714,8 @@ legend small {
 }
 
 .dpi-integration-card,
-.dpi-manual-card {
-  height: 100%;
-  align-self: stretch;
-}
-
-.dpi-schedule-card {
-  align-self: start;
-}
+.dpi-manual-card,
+.dpi-schedule-card { min-width: 0; align-self: start; }
 
 .dpi-integration-options {
   display: grid;
@@ -2723,10 +2738,6 @@ legend small {
 
 .dpi-run-button {
   width: 100%;
-}
-
-.dpi-schedule-card {
-  grid-column: 1 / -1;
 }
 
 #dpi-checker .dpi-schedule-card {
@@ -2782,6 +2793,21 @@ legend small {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+#schedule-nodes label > span { display: flex; min-width: 0; align-items: center; gap: 7px; }
+#schedule-nodes label > span > span { display: grid; min-width: 0; gap: 2px; }
+#schedule-nodes label b, #schedule-nodes label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#schedule-nodes label small { color: var(--rw-dark-2); font-size: 8px; }
+
+.ip-rotation-limit { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--rw-border); border-radius: 9px; background: rgba(13, 17, 23, .28); }
+.ip-rotation-limit > span { display: grid; min-width: 0; gap: 3px; }
+.ip-rotation-limit small { color: var(--rw-dark-2); font-size: 9px; }
+.ip-rotation-limit input { min-width: 0; }
+
+@media (max-width: 1320px) {
+  .dpi-workspace { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dpi-schedule-card { grid-column: 1 / -1; }
+}
+
 .inline-schedule {
   display: grid;
   gap: 7px;
@@ -2824,7 +2850,7 @@ legend small {
 
 .schedule-day-tabs {
   display: grid;
-  grid-template-columns: repeat(7, minmax(40px, 1fr));
+  grid-template-columns: repeat(7, minmax(32px, 1fr));
   gap: 6px;
 }
 
@@ -3039,6 +3065,8 @@ legend small {
     grid-template-columns: 1fr;
   }
 
+  .dpi-schedule-card { grid-column: auto; }
+
 }
 
 @media (max-width: 760px) {
@@ -3053,6 +3081,8 @@ legend small {
   .automation-trigger {
     gap: 5px;
   }
+
+  .ip-rotation-limit { grid-template-columns: 1fr; }
 
   .vless-source-card {
     grid-template-columns: 1fr;

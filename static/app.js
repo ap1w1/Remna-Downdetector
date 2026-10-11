@@ -496,9 +496,7 @@ function checked(selector) {
 }
 
 function renderIpPool(node) {
-  $("#auto-ip-replace").checked = Boolean(node.auto_ip_replace);
   $("#max-ip-replacements").value = node.max_ip_replacements ?? 1;
-  $("#auto-dns-replace").checked = Boolean(node.auto_dns_replace);
   const items = node.ip_pool || [];
   $("#ip-pool-list").innerHTML = items.length ? items.map((item) => `
     <div class="ip-pool-row ${esc(item.status)}" draggable="true" data-ip-id="${item.id}">
@@ -546,7 +544,7 @@ function fillAppSettings(force = false) {
   $("#telegram-state").textContent = state.settings.telegram_configured ? "Токен сохранён" : "Бот не настроен";
   const scheduledNodes = state.settings.dpi_schedule_nodes || [];
   $("#schedule-nodes").innerHTML = state.nodes.length ? state.nodes.map((node) => `
-    <label><input type="checkbox" value="${esc(node.uuid)}" ${scheduledNodes.includes(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)} ${esc(node.name)}</span></label>
+    <label><input type="checkbox" value="${esc(node.uuid)}" ${scheduledNodes.includes(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<span><b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></span></label>
   `).join("") : '<span class="muted">Ноды ещё не загружены</span>';
   updateScheduleNodeCount();
   syncScheduleEnabled();
@@ -1100,14 +1098,28 @@ async function beep() {
     if (context.state === "suspended") await context.resume();
     const duration = Math.max(0.15, Math.min(2, Number(localStorage.getItem("remnadown-sound-duration") || 0.4)));
     const sound = localStorage.getItem("remnadown-sound-type") || "signal";
-    const frequencies = sound === "double" ? [620, 820] : sound === "soft" ? [440] : sound === "alarm" ? [880, 660, 880] : [690];
-    frequencies.forEach((frequency, index) => {
+    const patterns = {
+      signal: [[690, 690, "triangle", 0.09]],
+      double: [[620, 620, "triangle", 0.09], [820, 820, "triangle", 0.09]],
+      soft: [[440, 440, "sine", 0.055]],
+      alarm: [[880, 880, "square", 0.09], [660, 660, "square", 0.09], [880, 880, "square", 0.09]],
+      siren: [[520, 1120, "sawtooth", 0.1], [1120, 520, "sawtooth", 0.1]],
+      raid: [[180, 760, "sawtooth", 0.11], [760, 180, "sawtooth", 0.11]],
+      klaxon: [[390, 390, "square", 0.11], [310, 310, "square", 0.11], [390, 390, "square", 0.11]],
+      pulse: [[980, 980, "square", 0.1], [540, 540, "square", 0.08], [980, 980, "square", 0.1], [540, 540, "square", 0.08]],
+      emergency: [[740, 980, "sawtooth", 0.1], [980, 740, "sawtooth", 0.1], [520, 520, "square", 0.11]],
+    };
+    const pattern = patterns[sound] || patterns.signal;
+    pattern.forEach(([startFrequency, endFrequency, oscillatorType, level], index) => {
       const oscillator = context.createOscillator(), gain = context.createGain();
-      const part = duration / frequencies.length, start = context.currentTime + index * part;
-      oscillator.type = sound === "soft" ? "sine" : sound === "alarm" ? "square" : "triangle";
-      oscillator.connect(gain); gain.connect(context.destination); oscillator.frequency.value = frequency;
+      const part = duration / pattern.length, start = context.currentTime + index * part;
+      oscillator.type = oscillatorType;
+      oscillator.connect(gain); gain.connect(context.destination);
+      oscillator.frequency.setValueAtTime(startFrequency, start);
+      oscillator.frequency.linearRampToValueAtTime(endFrequency, start + part * 0.88);
       const volume = Math.max(0, Math.min(1, Number(localStorage.getItem("remnadown-sound-volume") || 60) / 100));
-      gain.gain.setValueAtTime(Math.max(0.0001, (sound === "soft" ? 0.055 : 0.09) * volume), start); gain.gain.exponentialRampToValueAtTime(0.0001, start + part * 0.9);
+      gain.gain.setValueAtTime(Math.max(0.0001, level * volume), start);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + part * 0.9);
       oscillator.start(start); oscillator.stop(start + part);
     });
   } catch {
@@ -1274,7 +1286,7 @@ $("#node-settings").addEventListener("submit", async (event) => {
     vless_username: form.vless_username.value.trim(),
     action_chain: $$("input[type='checkbox']", $("#node-action-chain")).map((input) => ({ type: input.value, enabled: input.checked })),
     dpi_squad_uuids: [],
-    auto_dns_replace: $("#auto-dns-replace").checked,
+    auto_dns_replace: $('#node-action-chain input[value="replace_dns"]').checked,
     cpu_threshold: Number(form.cpu_threshold.value || 0), ram_threshold: Number(form.ram_threshold.value || 0),
     rx_threshold_mbps: Number(form.rx_threshold_mbps.value || 0), tx_threshold_mbps: Number(form.tx_threshold_mbps.value || 0),
     dpi_locations: ["russia"],
@@ -1367,11 +1379,12 @@ $("#save-ip-rotation").addEventListener("click", async () => {
   const response = await fetch(`/api/nodes/${encodeURIComponent(selected.uuid)}/ip-rotation`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ enabled: $("#auto-ip-replace").checked, max_replacements: Number($("#max-ip-replacements").value), csrf_token: csrf }),
+    body: JSON.stringify({ enabled: $('#node-action-chain input[value="rotate_ip"]').checked, max_replacements: Number($("#max-ip-replacements").value), csrf_token: csrf }),
   });
   if (response.ok) {
-    toast("Настройки автозамены сохранены");
-    await load({ force: true });
+    selected.auto_ip_replace = $('#node-action-chain input[value="rotate_ip"]').checked;
+    selected.max_ip_replacements = Number($("#max-ip-replacements").value);
+    toast("Лимит замен сохранён");
   } else {
     toast(await jsonError(response), true);
   }
