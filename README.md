@@ -26,7 +26,8 @@
   <path d="M472 252 C472 230 490 212 512 212 C534 212 552 230 552 252 L552 678 C552 689 558 695 570 695 L591 695 C612 695 623 719 607 735 L531 814 C520 826 504 826 493 814 L417 735 C401 719 412 695 433 695 L454 695 C466 695 472 689 472 678 Z" fill="url(#alert)"/>
 </svg>
 <img width="1024" height="1024" alt="remnawave-downdetector" src="https://github.com/user-attachments/assets/a6b3a437-35b9-4740-99b3-0227dddc358b" />
-# RemnaDownDetector
+
+## RemnaDownDetector
 
 Детектор падения онлайна на нодах Remnawave 2.7.4 — latest с веб-интерфейсом, графиками, настраиваемыми вебхуками и проверками через DPI Checker.
 
