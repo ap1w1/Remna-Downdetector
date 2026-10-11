@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import secrets
+import shlex
 import socket
 import sqlite3
 import time
@@ -72,6 +73,7 @@ icon_cache = IconCache(
     logger,
 )
 permission_alerts: deque[dict[str, str]] = deque(maxlen=20)
+update_process: asyncio.subprocess.Process | None = None
 managed_domains_cache: dict[str, Any] | None = None
 managed_domains_cache_at = 0.0
 managed_domains_cache_lock = asyncio.Lock()
@@ -1616,6 +1618,44 @@ async def domains_data(
     _: str = Depends(require_user),
 ):
     return await managed_domains(request.app, force_refresh=refresh)
+
+
+@app.post("/api/system/update")
+async def update_remnadown(request: Request, _: str = Depends(require_user)):
+    global update_process
+    payload = await request.json()
+    verify_csrf(request, str(payload.get("csrf_token", "")))
+    if update_process is not None and update_process.returncode is None:
+        raise HTTPException(409, "RemnaDown update is already running")
+    command = shlex.split(settings.remnadown_update_command)
+    if not command:
+        raise HTTPException(503, "RemnaDown update command is not configured")
+    executable = Path(command[0])
+    if executable.is_absolute() and not executable.exists():
+        raise HTTPException(503, f"Update command not found: {executable}")
+    try:
+        update_process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+    except OSError as exc:
+        logger.exception("Failed to start RemnaDown update")
+        raise HTTPException(503, f"Failed to start update: {exc}") from exc
+
+    async def log_update_output(process: asyncio.subprocess.Process) -> None:
+        output, _ = await process.communicate()
+        message = output.decode("utf-8", errors="replace").strip()
+        log = logger.info if process.returncode == 0 else logger.error
+        log(
+            "RemnaDown update finished with code %s: %s",
+            process.returncode,
+            message[-8000:],
+        )
+
+    asyncio.create_task(log_update_output(update_process))
+    logger.warning("RemnaDown update started by panel administrator")
+    return {"ok": True, "message": "Update started"}
 
 
 @app.post("/api/webhooks")

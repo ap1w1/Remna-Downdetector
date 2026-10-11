@@ -1569,6 +1569,10 @@ $("#hooks-list").addEventListener("click", async (event) => {
   }
 });
 
+$("#hooks-list").addEventListener("pointerdown", (event) => {
+  if (event.target.closest("[data-delete-hook]")) event.stopPropagation();
+});
+
 $("#hooks-list").addEventListener("change", async (event) => {
   const toggle = event.target.closest("[data-hook-enabled]");
   if (!toggle) return;
@@ -1600,6 +1604,27 @@ $("#hooks-list").addEventListener("change", async (event) => {
 $("#events-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-copy-json]");
   if (button) navigator.clipboard.writeText(button.dataset.copyJson).then(() => toast("JSON скопирован"));
+});
+
+$("#update-remnadown").addEventListener("click", async (event) => {
+  const warning = "Обновление загрузит новую версию и перезапустит RemnaDown. Несовместимые изменения могут нарушить работу панели. Продолжить?";
+  if (!window.confirm(warning)) return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  button.classList.add("is-updating");
+  try {
+    const response = await fetch("/api/system/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrf_token: csrf }),
+    });
+    if (!response.ok) throw new Error(await jsonError(response));
+    toast("Обновление запущено. Панель будет перезапущена");
+  } catch (error) {
+    button.disabled = false;
+    button.classList.remove("is-updating");
+    toast(`Не удалось запустить обновление: ${error.message}`, true);
+  }
 });
 
 function syncSoundButton() {
