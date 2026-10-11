@@ -113,7 +113,7 @@ function renderApplicationVersion() {
   const button = $("#version-button");
   $("#current-version").textContent = application.current || "—";
   button.classList.toggle("update-available", Boolean(application.update_available));
-  button.title = application.update_available ? `Доступна сборка ${application.latest}` : `Сборка RemnaDown ${application.current || ""}`.trim();
+  button.title = application.update_available ? `Доступна версия ${application.latest}` : `RemnaDown ${application.current || ""}`.trim();
 }
 
 function formatUptime(value) {
@@ -1614,8 +1614,8 @@ $("#sound-toggle").addEventListener("click", () => {
 $("#support-project").addEventListener("click", () => $("#support-dialog").showModal());
 $("#version-button").addEventListener("click", () => {
   const application = state.settings.application || {};
-  $("#update-version-summary").textContent = application.update_available ? `Сборка ${application.current}, доступна ${application.latest}` : `Установлена сборка ${application.current || "—"}`;
-  $("#update-dialog-text").textContent = application.update_available ? "Доступно обновление RemnaDown. Выполните команды на сервере:" : "У вас установлена актуальная сборка RemnaDown. Для принудительного обновления выполните:";
+  $("#update-version-summary").textContent = application.update_available ? `Установлена ${application.current}, доступна ${application.latest}` : `Установлена версия ${application.current || "—"}`;
+  $("#update-dialog-text").textContent = application.update_available ? "Доступна новая версия RemnaDown. Выполните команды на сервере:" : "У вас установлена актуальная версия RemnaDown. Для принудительного обновления выполните:";
   $("#update-dialog").showModal();
 });
 $$('[data-close-update]').forEach((button) => button.addEventListener("click", () => $("#update-dialog").close()));

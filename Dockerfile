@@ -1,12 +1,10 @@
 FROM python:3.12-slim AS runtime
-ARG REMNADOWN_VERSION=unknown
-ENV REMNADOWN_VERSION=${REMNADOWN_VERSION}
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN useradd --create-home --uid 10001 app
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY main.py schema.sql ./
+COPY main.py schema.sql VERSION ./
 COPY remnadown ./remnadown
 COPY templates ./templates
 COPY static ./static

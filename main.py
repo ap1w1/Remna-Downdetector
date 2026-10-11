@@ -49,8 +49,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 ROOT = Path(__file__).parent
 logger = logging.getLogger("remnadown")
-APP_VERSION = os.getenv("REMNADOWN_VERSION", "unknown").strip() or "unknown"
-UPDATE_CHECK_URL = "https://api.github.com/repos/ap1w1/Remna-Downdetector/commits/master"
+APP_VERSION = os.getenv("REMNADOWN_VERSION", "").strip() or (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+UPDATE_CHECK_URL = "https://raw.githubusercontent.com/ap1w1/Remna-Downdetector/master/VERSION"
 REPOSITORY_URL = "https://github.com/ap1w1/Remna-Downdetector"
 
 
@@ -98,16 +98,18 @@ async def application_version() -> dict[str, Any]:
                     async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
                         response = await client.get(UPDATE_CHECK_URL, headers={"User-Agent": f"RemnaDown/{APP_VERSION}"})
                         response.raise_for_status()
-                    latest = str(response.json().get("sha", ""))
-                    if not re.fullmatch(r"[0-9a-f]{40}", latest):
-                        raise ValueError("Unexpected GitHub commit response")
-                    update_cache["latest"] = latest[:7]
+                    latest = response.text.strip().lstrip("v")
+                    if not re.fullmatch(r"\d+(?:\.\d+){2}", latest):
+                        raise ValueError("Unexpected VERSION format")
+                    update_cache["latest"] = latest
                     update_cache["error"] = ""
                 except Exception as exc:
                     update_cache["error"] = str(exc)[:200]
                 update_cache["checked_at"] = time.monotonic()
     latest = str(update_cache.get("latest") or APP_VERSION)
-    update_available = APP_VERSION != "unknown" and latest != APP_VERSION and not latest.startswith(APP_VERSION) and not APP_VERSION.startswith(latest)
+    current_parts = tuple(int(part) for part in APP_VERSION.lstrip("v").split("."))
+    latest_parts = tuple(int(part) for part in latest.lstrip("v").split("."))
+    update_available = latest_parts > current_parts
     return {"current": APP_VERSION, "latest": latest, "update_available": update_available, "repository_url": REPOSITORY_URL, "check_error": str(update_cache.get("error", ""))}
 
 
