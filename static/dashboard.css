@@ -359,6 +359,8 @@
   margin-bottom: 12px;
 }
 
+.page-save-button { width: auto; min-width: 190px; flex: 0 0 auto; }
+
 .toolbar-heading,
 .card-heading,
 .dialog-title {
@@ -2419,7 +2421,6 @@ legend small {
 .token-editor { display: grid; gap: 8px; }.token-editor .secondary-button { justify-self: start; }.integration-settings { grid-column: 1/-1; padding: 10px; border: 1px solid var(--rw-border); border-radius: 8px; }.integration-settings summary { cursor: pointer; font-weight: 800; }.integration-settings .field-grid { margin-top: 12px; }
 .balance-threshold-field { align-content: start; }
 .balance-threshold-field > span:first-child { color: var(--rw-dark-1); font-size: 11px; font-weight: 800; }
-.balance-threshold-field > small { color: var(--rw-dark-2); font-size: 9px; font-weight: 500; line-height: 1.35; }
 .input-with-suffix { position: relative; display: block; }
 .input-with-suffix input { width: 100%; padding-right: 48px; }
 .input-with-suffix b { position: absolute; top: 50%; right: 11px; color: var(--rw-dark-2); font-size: 9px; letter-spacing: .04em; pointer-events: none; transform: translateY(-50%); }
@@ -2702,7 +2703,7 @@ legend small {
 /* DPI Checker workspace */
 .dpi-workspace {
   display: grid;
-  grid-template-columns: minmax(240px, .78fr) minmax(290px, 1fr) minmax(340px, 1.18fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: start;
   gap: 12px;
   margin-bottom: 12px;
@@ -2715,7 +2716,7 @@ legend small {
 
 .dpi-integration-card,
 .dpi-manual-card,
-.dpi-schedule-card { min-width: 0; align-self: start; }
+.dpi-schedule-card { min-width: 0; min-height: 330px; align-self: start; }
 
 .dpi-integration-options {
   display: grid;
@@ -3081,6 +3082,8 @@ legend small {
   .automation-trigger {
     gap: 5px;
   }
+
+  .page-save-button { width: 100%; }
 
   .ip-rotation-limit { grid-template-columns: 1fr; }
 

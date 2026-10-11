@@ -1718,7 +1718,7 @@ async def dpi_callback(token: str, request: Request):
 @app.get("/api/nodes/{node_uuid}/dpi")
 async def dpi_history(node_uuid: str, _: str = Depends(require_user)):
     with closing(connect_db()) as db:
-        rows = db.execute("SELECT id,target,location,provider_id,status,result,created_at,updated_at,kind,source FROM dpi_checks WHERE node_uuid=? ORDER BY id DESC LIMIT 40", (node_uuid,)).fetchall()
+        rows = db.execute("SELECT id,target,location,provider_id,status,result,created_at,updated_at,kind,source FROM dpi_checks WHERE node_uuid=? ORDER BY id DESC LIMIT 200", (node_uuid,)).fetchall()
     history = []
     for row in rows:
         item = dict(row)

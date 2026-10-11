@@ -1022,14 +1022,14 @@ async function loadDpi() {
     const response = await fetch(`/api/nodes/${encodeURIComponent(selected.uuid)}/dpi`, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const jobs = await response.json();
-    $("#dpi-result").innerHTML = jobs.length ? jobs.slice(0, 40).map((job) => {
+    $("#dpi-result").innerHTML = jobs.length ? jobs.map((job) => {
       const result = job.result || {};
       const progress = result.progress || {};
       const status = dpiStatus(job);
       const percentDone = finite(progress.percent) ?? (["completed", "failed", "cancelled", "timeout"].includes(status) ? 100 : 0);
       const region = REGIONS[job.location]?.name || job.location;
       const resultItems = collection(result.results, "items", "results", "data").filter((item) => item.is_direct !== true);
-      const hasResultError = Boolean(result.error) || resultItems.some((item) => Boolean(item.error));
+      const hasResultError = Boolean(result.error) || ["failed", "cancelled", "timeout"].includes(status);
       const note = hasResultError
         ? "Подробности ошибки доступны в полной информации"
         : result.timed_out

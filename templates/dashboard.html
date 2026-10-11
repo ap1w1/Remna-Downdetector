@@ -9,7 +9,7 @@
   <title>RemnaDownDetector</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
   <link rel="stylesheet" href="/static/app.css?v=20261009-2">
-  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-24">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-25">
 </head>
 <body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
   <div class="app-shell">
@@ -188,6 +188,7 @@
               <span class="theme-icon cyan"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.09A1.7 1.7 0 0 0 8.55 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.2 15a1.7 1.7 0 0 0-.6-1A1.7 1.7 0 0 0 2.5 13.6H2.4V9.6h.1A1.7 1.7 0 0 0 4.2 8a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.55 3.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2h4v.09A1.7 1.7 0 0 0 15 3.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 .6 1 1.7 1.7 0 0 0 1.1.4h.09v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg></span>
               <div><h1>Настройки</h1><p>Мониторинг, DPI Checker и уведомления</p></div>
             </div>
+            <button class="primary-button page-save-button" type="submit" form="app-settings">Сохранить настройки</button>
           </div>
 
           <form id="app-settings" class="settings-grid">
@@ -216,12 +217,11 @@
               <p class="form-hint">Без ID топика сообщение отправляется в общий чат.</p>
             </article>
 
-            <div class="settings-actions"><button class="primary-button" type="submit">Сохранить настройки</button></div>
           </form>
         </section>
         <section id="logs" class="view"><div class="page-heading"><div class="toolbar-heading"><span class="theme-icon red">!</span><div><h1>Логи</h1><p>Ошибки приложения, интеграций и недостаточные права API-токена</p></div></div></div><div class="event-filters panel-surface"><label><span>Поиск</span><input id="log-search" type="search" placeholder="Текст, источник или ошибка"></label><label><span>Уровень</span><select id="log-level"><option value="all">Все уровни</option><option value="ERROR">Ошибки</option><option value="WARNING">Предупреждения</option><option value="INFO">Информация</option></select></label><button id="refresh-logs" class="secondary-button" type="button">Обновить</button></div><div id="logs-list" class="logs-list"><div class="empty">Загрузка логов…</div></div></section>
         <section id="dpi-checker" class="view">
-          <div class="page-heading"><div class="toolbar-heading"><span class="theme-icon violet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M4 12h16M12 4a15 15 0 0 1 0 16"/></svg></span><div><h1>DPI Checker</h1><p>Подключение сервиса, ручные и автоматические проверки</p></div></div></div>
+          <div class="page-heading"><div class="toolbar-heading"><span class="theme-icon violet"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M4 12h16M12 4a15 15 0 0 1 0 16"/></svg></span><div><h1>DPI Checker</h1><p>Подключение сервиса, ручные и автоматические проверки</p></div></div><button class="primary-button page-save-button" type="submit" form="app-settings">Сохранить настройки DPI</button></div>
           <div class="dpi-workspace">
             <article class="settings-card dpi-integration-card">
               <div class="card-heading"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>Подключение</h2><p id="dpi-api-state">API-токен не настроен</p></div></div>
@@ -229,7 +229,7 @@
               <button id="change-dpi-token" class="primary-button compact-action dpi-token-button" type="button">Изменить API-токен</button>
               <div class="dpi-integration-options">
                 <label class="switch-row"><span><b>Инфрабиллинг Remnawave</b><small>Записывать стоимость завершённых проверок</small></span><input form="app-settings" name="dpi_infra_billing_enabled" type="checkbox"><i></i></label>
-                <label class="balance-threshold-field"><span>Порог предупреждения</span><small>Сообщить, когда баланс станет ниже</small><span class="input-with-suffix"><input form="app-settings" name="dpi_balance_threshold" type="number" min="0" max="100000" step="0.01"><b>USD</b></span></label>
+                <label class="balance-threshold-field"><span>Отправить webhook, когда баланс станет ниже</span><span class="input-with-suffix"><input form="app-settings" name="dpi_balance_threshold" type="number" min="0" max="100000" step="0.01"><b>USD</b></span></label>
               </div>
             </article>
             <article class="settings-card dpi-manual-card">
@@ -252,7 +252,6 @@
                   <details class="region-picker"><summary><span>Регионы РФ</span><b id="schedule-region-count">Оптимальный набор</b></summary><div class="region-picker-popover"><input id="schedule-region-search" type="search" placeholder="Найти регион" autocomplete="off"><div id="schedule-pops" class="check-list compact"></div></div></details>
                 </div>
               </div>
-              <div class="dpi-settings-actions"><p>Настройки подключения и расписания сохраняются вместе.</p><button class="primary-button compact-action" type="submit" form="app-settings">Сохранить настройки DPI</button></div>
             </article>
           </div>
           <div class="dpi-history-grid"><article class="settings-card"><div class="card-heading"><div><h2>История проверок</h2><p>Полный ответ и техническая информация доступны внутри записи</p></div></div><div id="dpi-result" class="dpi-result"><div class="empty">Выберите ноду</div></div></article><article class="settings-card dpi-expenses-card"><div class="card-heading"><div><h2>Расходы</h2><p>Списания DPI Checker</p></div></div><div id="dpi-expenses" class="dpi-expenses"></div></article></div>
@@ -391,6 +390,6 @@
   <dialog id="activate-ip-dialog" class="compact-dialog confirm-ip-dialog"><form method="dialog" id="activate-ip-form"><div class="dialog-header"><div class="dialog-title"><span class="theme-icon violet">IP</span><div><h2>Установить IP-адрес</h2><p id="activate-ip-address">—</p></div></div><button class="dialog-close" type="button" data-close-ip-dialog aria-label="Закрыть">×</button></div><div class="confirm-question"><b>1. Изменить основной IP ноды?</b><div><label><input type="radio" name="confirm_ip" value="yes"> Да</label><label><input type="radio" name="confirm_ip" value="no"> Нет</label></div></div><div class="confirm-question"><b>2. Обновить IP у всех привязанных доменов?</b><div><label><input type="radio" name="confirm_dns" value="yes"> Да</label><label><input type="radio" name="confirm_dns" value="no"> Нет</label></div></div><p class="form-hint">Предыдущий основной IP будет добавлен последним в список резервных.</p><div class="dialog-actions"><button class="secondary-button" type="button" data-close-ip-dialog>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
   <dialog id="support-dialog" class="support-dialog"><button class="dialog-close" type="button" aria-label="Закрыть">×</button><div class="support-hero"><span>♥</span><div><h2>Поддержать проект</h2><p>Спасибо за поддержку развития RemnaDownDetector</p></div></div><div class="wallet-list"><button type="button" data-wallet="TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa"><b>USDT TRC20</b><code>TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa</code><span>Копировать</span></button><button type="button" data-wallet="UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN"><b>USDT TON</b><code>UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN</code><span>Копировать</span></button><button type="button" data-wallet="0x1B7905b1F335cdA649100f660d824018e6dE60A2"><b>USDT BEP20</b><code>0x1B7905b1F335cdA649100f660d824018e6dE60A2</code><span>Копировать</span></button><button type="button" data-wallet="bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy"><b>BTC</b><code>bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy</code><span>Копировать</span></button></div><div class="support-services"><a href="https://t.me/send?start=IV112jEOQ7s1" target="_blank" rel="noopener noreferrer"><span>↗</span><b>CryptoBot</b></a><a href="https://t.me/xrocket?start=inv_XGcVb2B8xfpV6Wi" target="_blank" rel="noopener noreferrer"><span>↗</span><b>XRocket</b></a></div></dialog>
   <dialog id="dpi-token-dialog" class="compact-dialog dpi-token-dialog"><form method="dialog" id="dpi-token-form"><div class="dialog-header"><div class="dialog-title"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>API-токен DPI Checker</h2><p>Новый токен будет сохранён после подтверждения</p></div></div><button class="dialog-close" type="button" data-close-dpi-token aria-label="Закрыть">×</button></div><div class="dpi-token-dialog-body"><label>API-токен<input form="app-settings" name="dpi_api_key" type="password" placeholder="Введите новый токен" autocomplete="new-password"></label></div><div class="dialog-actions"><button class="secondary-button dialog-secondary-button" type="button" data-close-dpi-token>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
-  <script src="/static/app.js?v=20261011-25"></script>
+  <script src="/static/app.js?v=20261011-26"></script>
 </body>
 </html>
