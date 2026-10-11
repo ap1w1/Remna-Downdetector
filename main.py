@@ -1431,18 +1431,44 @@ async def online_meta(_: str = Depends(require_user)):
 
 
 @app.get("/api/metrics/history")
-async def metrics_history(days: int = 1, nodes: str = "", _: str = Depends(require_user)):
+async def metrics_history(days: int = 1, nodes: str = "", date_from: str = "", date_to: str = "", _: str = Depends(require_user)):
     days = max(1, min(days, 365))
     requested = {item for item in nodes.split(",") if item}
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     with closing(connect_db()) as db:
+        panel_tz_name = setting_value(db, "timezone", settings.panel_timezone)
+        try:
+            panel_tz = ZoneInfo(panel_tz_name)
+        except ZoneInfoNotFoundError:
+            panel_tz = timezone.utc
+        if bool(date_from) != bool(date_to):
+            raise HTTPException(422, "Both date_from and date_to are required")
+        if date_from and date_to:
+            try:
+                start_date = datetime.strptime(date_from, "%Y-%m-%d")
+                end_date = datetime.strptime(date_to, "%Y-%m-%d")
+            except ValueError as exc:
+                raise HTTPException(422, "Invalid date range") from exc
+            start = start_date.replace(tzinfo=panel_tz)
+            end = (end_date + timedelta(days=1)).replace(tzinfo=panel_tz)
+            if start >= end or end - start > timedelta(days=366):
+                raise HTTPException(422, "Date range must be between 1 and 366 days")
+            cutoff, upper_bound = start.astimezone(timezone.utc).isoformat(), end.astimezone(timezone.utc).isoformat()
+        else:
+            upper_bound = datetime.now(timezone.utc).isoformat()
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         available = [dict(row) for row in db.execute("SELECT uuid,name,country_code,address FROM nodes ORDER BY view_position,name")]
         selected = [node for node in available if not requested or node["uuid"] in requested]
         series = []
         for node in selected:
-            rows = db.execute("SELECT online,cpu_percent,ram_percent,rx_bps,tx_bps,created_at FROM samples WHERE node_uuid=? AND created_at>=? ORDER BY id DESC LIMIT 2500", (node["uuid"], cutoff)).fetchall()
-            series.append({"node": node, "samples": [dict(row) for row in reversed(rows)]})
-    return {"days": days, "series": series}
+            samples = [dict(row) for row in db.execute("SELECT online,cpu_percent,ram_percent,rx_bps,tx_bps,created_at FROM samples WHERE node_uuid=? AND created_at>=? AND created_at<? ORDER BY created_at", (node["uuid"], cutoff, upper_bound))]
+            if len(samples) > 1800:
+                step = (len(samples) + 1799) // 1800
+                reduced = samples[::step]
+                if reduced[-1]["created_at"] != samples[-1]["created_at"]:
+                    reduced.append(samples[-1])
+                samples = reduced
+            series.append({"node": node, "samples": samples})
+    return {"days": days, "date_from": cutoff, "date_to": upper_bound, "series": series}
 
 
 @app.get("/api/logs")
@@ -1627,8 +1653,11 @@ async def node_history(node_uuid: str, days: int = 1, _: str = Depends(require_u
     with closing(connect_db()) as db:
         rows = [dict(row) for row in db.execute("SELECT online,connected,cpu_percent,ram_percent,load_1,load_5,load_15,rx_bps,tx_bps,rx_total,tx_total,created_at FROM samples WHERE node_uuid=? AND created_at>=? ORDER BY created_at", (node_uuid, cutoff))]
     if len(rows) > 1600:
-        step = max(1, len(rows) // 1500)
-        rows = rows[::step]
+        step = (len(rows) + 1499) // 1500
+        reduced = rows[::step]
+        if reduced[-1]["created_at"] != rows[-1]["created_at"]:
+            reduced.append(rows[-1])
+        rows = reduced
     return {"samples": rows, "days": days}
 
 

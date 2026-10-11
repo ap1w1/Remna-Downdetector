@@ -36,7 +36,8 @@ let refreshTimer = null;
 let dpiOverview = { profile: {}, checks: [], pops: [], stats: [] };
 let onlineHours = 24;
 let onlineSelected = new Set();
-const ONLINE_COLORS = ["#2dd4bf", "#818cf8", "#fb7185", "#fbbf24", "#38bdf8", "#c084fc", "#4ade80", "#fb923c"];
+const CHART_SERIES_COUNT = 8;
+const chartSeriesClass = (index) => `chart-series-${index % CHART_SERIES_COUNT}`;
 const dpiAvailable = () => dpiEnabled || Boolean(state.settings.dpi_api_configured);
 let domainData = [];
 let domainsLoadedAt = 0;
@@ -47,6 +48,11 @@ let lastIntegrationAlert = sessionStorage.getItem("remnadown-integration-alert")
 let activeScheduleDay = 0;
 let metricsData = { series: [] };
 let metricsSelected = new Set();
+let metricsDateFrom = "";
+let metricsDateTo = "";
+let metricsLoadSequence = 0;
+let metricsLoadTimer = null;
+let historyLoadSequence = 0;
 
 const esc = (value) => String(value ?? "").replace(
   /[&<>"']/g,
@@ -66,11 +72,11 @@ function enhanceCompactPickers() {
     $("[data-picker-all]", popover).addEventListener("click", () => { $$("input[type='checkbox']", popover).forEach((input) => { input.checked = true; input.dispatchEvent(new Event("change", { bubbles: true })); }); });
     $("[data-picker-clear]", popover).addEventListener("click", () => { $$("input[type='checkbox']", popover).forEach((input) => { input.checked = false; input.dispatchEvent(new Event("change", { bubbles: true })); }); });
     $("[data-picker-done]", popover).addEventListener("click", () => { picker.open = false; });
-    picker.addEventListener("toggle", () => { if (picker.open) $$("details.region-picker[open]").filter((item) => item !== picker).forEach((item) => { item.open = false; }); });
+    picker.addEventListener("toggle", () => { if (picker.open) $$("details.region-picker[open], details.date-range-picker[open]").filter((item) => item !== picker).forEach((item) => { item.open = false; }); });
   });
 }
 enhanceCompactPickers();
-document.addEventListener("pointerdown", (event) => { $$("details.region-picker[open]").forEach((picker) => { if (!picker.contains(event.target)) picker.open = false; }); });
+document.addEventListener("pointerdown", (event) => { $$("details.region-picker[open], details.date-range-picker[open]").forEach((picker) => { if (!picker.contains(event.target)) picker.open = false; }); });
 function jsonHighlight(value) { return esc(typeof value === "string" ? value : JSON.stringify(value, null, 2)).replace(/(&quot;.*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?|[{}\[\],:]/g, (match, text, colon, literal) => text ? `<span class="json-${colon ? "key" : "string"}">${text}</span>${colon ? '<span class="json-punctuation">:</span>' : ""}` : literal ? `<span class="json-literal">${match}</span>` : /^-?\d/.test(match) ? `<span class="json-number">${match}</span>` : `<span class="json-punctuation">${match}</span>`); }
 function highlightedText(value) { try { return jsonHighlight(JSON.parse(value)); } catch { return esc(value); } }
 
@@ -288,7 +294,7 @@ function nodeRow(node) {
           <span class="node-name">${esc(node.name)}</span>
         </span>
         <span class="node-subline">
-          <span class="ram-mini-track ${loadTone}" style="--load-width:${systemLoad}%" title="Нагрузка системы: ${Math.round(systemLoad)}%"></span>
+          <span class="ram-mini-track ${loadTone}" data-load-width="${systemLoad}" title="Нагрузка системы: ${Math.round(systemLoad)}%"></span>
           <span>${Math.round(systemLoad)}%</span>
           <span class="load-value">● ${load}</span>
           <span class="rx">↓ ${bitrate(sample.rx_bps)}</span>
@@ -350,6 +356,7 @@ function renderNodes() {
   $("#nodes").innerHTML = nodes.length
     ? nodes.map(nodeRow).join("")
     : '<div class="empty">По заданным условиям ноды не найдены</div>';
+  $$('[data-load-width]', $("#nodes")).forEach((track) => track.style.setProperty("--load-width", `${track.dataset.loadWidth}%`));
   $("#nodes-subtitle").textContent = `Показано ${nodes.length} из ${state.nodes.length}`;
 }
 
@@ -474,9 +481,9 @@ function renderOnline() {
 
 function renderOnlineChart(nodes) {
   const cutoff = Date.now() - onlineHours * 3600000;
-  const series = nodes.map((node, index) => ({ node, color: ONLINE_COLORS[index % ONLINE_COLORS.length], points: (node.samples || []).map((sample) => [new Date(sample.created_at).getTime(), finite(sample.online) ?? 0]).filter(([time]) => time >= cutoff) })).filter((item) => item.points.length);
+  const series = nodes.map((node, index) => ({ node, className: chartSeriesClass(index), points: (node.samples || []).map((sample) => [new Date(sample.created_at).getTime(), finite(sample.online) ?? 0]).filter(([time]) => time >= cutoff) })).filter((item) => item.points.length);
   const points = series.flatMap((item) => item.points);
-  $("#online-chart-caption").innerHTML = series.map((item) => `<span class="online-legend"><i style="background:${item.color}"></i>${esc(item.node.name)}</span>`).join("");
+  $("#online-chart-caption").innerHTML = series.map((item) => `<span class="online-legend"><i class="${item.className}"></i>${esc(item.node.name)}</span>`).join("");
   if (!points.length) { $("#online-chart").innerHTML = '<div class="empty">Нет данных за выбранный период</div>'; ["#online-current", "#online-max", "#online-min"].forEach((id) => $(id).textContent = "—"); return; }
   const width = 1000, height = 270, margin = { top: 14, right: 18, bottom: 30, left: 76 };
   const values = points.map(([, value]) => value), max = Math.max(1, ...values), min = 0, span = Math.max(1, max);
@@ -484,14 +491,14 @@ function renderOnlineChart(nodes) {
   const xForTime = (time) => margin.left + (time - minTime) * (width - margin.left - margin.right) / Math.max(1, maxTime - minTime);
   const yFor = (value) => margin.top + (max - value) * (height - margin.top - margin.bottom) / span;
   const grid = Array.from({ length: 5 }, (_, index) => { const ratio = index / 4, y = margin.top + ratio * (height - margin.top - margin.bottom), value = max - ratio * span; return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 9}" y="${y + 3}" text-anchor="end">${compactNumber(Math.round(value))}</text>`; }).join("");
-  const lines = series.map((item) => `<path class="online-node-line" style="stroke:${item.color}" d="${item.points.map(([time,value], index) => `${index ? "L" : "M"}${xForTime(time).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>`).join("");
+  const lines = series.map((item) => `<path class="online-node-line ${item.className}" d="${item.points.map(([time,value], index) => `${index ? "L" : "M"}${xForTime(time).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>`).join("");
   $("#online-chart").innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${grid}${lines}</svg>`;
   $("#online-current").textContent = compactNumber(series.reduce((sum,item) => sum + item.points.at(-1)[1], 0)); $("#online-max").textContent = compactNumber(max); $("#online-min").textContent = compactNumber(min);
 }
 
 function bindOnlineChart(points, xFor, margin, width, height) {
   const container = $("#online-chart"), cursor = $(".chart-cursor", container), tooltip = $(".chart-tooltip", container);
-  container.onpointermove = (event) => { const rect = container.getBoundingClientRect(), x = Math.max(0, Math.min(rect.width, event.clientX - rect.left)), chartX = x / rect.width * width, index = Math.max(0, Math.min(points.length - 1, Math.round((chartX - margin.left) / Math.max(1, width - margin.left - margin.right) * (points.length - 1)))); cursor.setAttribute("x1", xFor(index)); cursor.setAttribute("x2", xFor(index)); cursor.setAttribute("visibility", "visible"); tooltip.hidden = false; tooltip.style.left = `${x}px`; tooltip.innerHTML = `<b>${compactNumber(points[index][1])}</b><span>${new Date(points[index][0]).toLocaleString("ru-RU")}</span>`; };
+  container.onpointermove = (event) => { const rect = container.getBoundingClientRect(), x = Math.max(0, Math.min(rect.width, event.clientX - rect.left)), chartX = x / rect.width * width, index = Math.max(0, Math.min(points.length - 1, Math.round((chartX - margin.left) / Math.max(1, width - margin.left - margin.right) * (points.length - 1)))); cursor.setAttribute("x1", xFor(index)); cursor.setAttribute("x2", xFor(index)); cursor.setAttribute("visibility", "visible"); tooltip.hidden = false; tooltip.innerHTML = `<b>${compactNumber(points[index][1])}</b><span>${new Date(points[index][0]).toLocaleString("ru-RU")}</span>`; };
   container.onpointerleave = () => { cursor.setAttribute("visibility", "hidden"); tooltip.hidden = true; };
 }
 
@@ -789,7 +796,7 @@ async function load({ force = false } = {}) {
       integration_alerts: Array.isArray(payload.integration_alerts) ? payload.integration_alerts : [],
     };
     const metricChoices = $("#metrics-node-options");
-    if (metricChoices) metricChoices.innerHTML = state.nodes.map((node) => `<label><input type="checkbox" value="${esc(node.uuid)}" ${metricsSelected.has(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)} ${esc(node.name)}</span></label>`).join("");
+    if (metricChoices) metricChoices.innerHTML = state.nodes.map((node) => `<label><input type="checkbox" value="${esc(node.uuid)}" ${metricsSelected.has(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></label>`).join("");
     const integrationAlert = state.integration_alerts[0];
     if (integrationAlert && integrationAlert.id !== lastIntegrationAlert) {
       lastIntegrationAlert = integrationAlert.id;
@@ -841,14 +848,22 @@ async function openNode(uuid) {
 
 async function loadHistory() {
   if (!selected) return;
+  const sequence = ++historyLoadSequence;
+  const requestedDays = days;
+  const rangeButtons = $$("#node-dialog .range-tabs button");
+  rangeButtons.forEach((button) => { button.disabled = true; });
   try {
-    const response = await fetch(`/api/nodes/${encodeURIComponent(selected.uuid)}/history?days=${days}`, { cache: "no-store" });
+    const response = await fetch(`/api/nodes/${encodeURIComponent(selected.uuid)}/history?days=${requestedDays}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
+    if (sequence !== historyLoadSequence) return;
     history = Array.isArray(payload.samples) ? payload.samples : [];
     drawChart();
   } catch (error) {
+    if (sequence !== historyLoadSequence) return;
     $("#dialog-chart").innerHTML = `<div class="empty">Не удалось загрузить историю: ${esc(error.message)}</div>`;
+  } finally {
+    if (sequence === historyLoadSequence) rangeButtons.forEach((button) => { button.disabled = false; });
   }
 }
 
@@ -864,19 +879,64 @@ function metricValue(value) {
   return percent(value);
 }
 
-function chartPath(samples, series, xFor, yFor) {
-  let path = "";
-  let drawing = false;
-  samples.forEach((sample, index) => {
-    const value = sampleValues(sample)[series];
-    if (value === null) {
-      drawing = false;
-      return;
-    }
-    path += `${drawing ? "L" : "M"}${xFor(index).toFixed(2)},${yFor(value).toFixed(2)} `;
-    drawing = true;
+function chartDateLabel(timestamp, range) {
+  const options = range > 2 * 86400000
+    ? { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }
+    : { hour: "2-digit", minute: "2-digit" };
+  return new Intl.DateTimeFormat("ru-RU", { timeZone: state.settings.timezone || "Europe/Moscow", ...options }).format(new Date(timestamp));
+}
+
+function nearestChartPoint(points, target) {
+  let low = 0, high = points.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (points[middle][0] < target) low = middle + 1;
+    else high = middle;
+  }
+  if (low > 0 && Math.abs(points[low - 1][0] - target) < Math.abs(points[low][0] - target)) return points[low - 1];
+  return points[low];
+}
+
+function renderTimeChart(container, inputSeries, formatValue, bounds = {}) {
+  const series = inputSeries.map((item, index) => ({ ...item, className: item.className || chartSeriesClass(index), points: item.points.filter(([timestamp, value]) => Number.isFinite(timestamp) && Number.isFinite(value)).sort((left, right) => left[0] - right[0]) })).filter((item) => item.points.length);
+  const points = series.flatMap((item) => item.points);
+  if (!points.length) return false;
+  let rawMin = Infinity, rawMax = -Infinity, minTime = Infinity, maxTime = -Infinity;
+  points.forEach(([timestamp, value]) => {
+    rawMin = Math.min(rawMin, value); rawMax = Math.max(rawMax, value);
+    minTime = Math.min(minTime, timestamp); maxTime = Math.max(maxTime, timestamp);
   });
-  return path.trim();
+  let min = bounds.min ?? Math.min(0, rawMin);
+  let max = bounds.max ?? rawMax;
+  if (max <= min) max = min + Math.max(1, Math.abs(min) * 0.1);
+  if (bounds.max === undefined) max += (max - min) * 0.06;
+  const span = Math.max(1e-9, max - min);
+  const timeSpan = Math.max(1, maxTime - minTime);
+  const width = Math.max(720, Math.round(container.clientWidth || 1000));
+  const height = Math.max(260, Math.round(container.clientHeight || 300));
+  const margin = { top: 18, right: 20, bottom: 38, left: 88 };
+  const plotWidth = width - margin.left - margin.right, plotHeight = height - margin.top - margin.bottom;
+  const xFor = (timestamp) => margin.left + (timestamp - minTime) * plotWidth / timeSpan;
+  const yFor = (value) => margin.top + (max - value) * plotHeight / span;
+  const horizontalGrid = Array.from({ length: 5 }, (_, index) => { const value = max - index / 4 * span, y = yFor(value); return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${esc(formatValue(value))}</text>`; }).join("");
+  const verticalGrid = Array.from({ length: 5 }, (_, index) => { const timestamp = minTime + index / 4 * timeSpan, x = xFor(timestamp); return `<line class="chart-grid chart-grid-vertical" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}"/><text class="chart-axis-label" x="${x}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === 4 ? "end" : "middle"}">${esc(chartDateLabel(timestamp, timeSpan))}</text>`; }).join("");
+  const paths = series.map((item) => `<path class="chart-line ${item.className}" d="${item.points.map(([timestamp, value], index) => `${index ? "L" : "M"}${xFor(timestamp).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>${item.points.length === 1 ? `<circle class="${item.className}" cx="${xFor(item.points[0][0])}" cy="${yFor(item.points[0][1])}" r="4"/>` : ""}`).join("");
+  container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="График метрик">${horizontalGrid}${verticalGrid}${paths}<line class="chart-cursor" x1="0" y1="${margin.top}" x2="0" y2="${height - margin.bottom}" visibility="hidden"/></svg><div class="chart-tooltip" hidden></div>`;
+  container.onpointermove = (event) => {
+    const rect = container.getBoundingClientRect();
+    const plotLeft = margin.left / width * rect.width, plotRight = margin.right / width * rect.width;
+    const relative = Math.max(0, Math.min(1, (event.clientX - rect.left - plotLeft) / Math.max(1, rect.width - plotLeft - plotRight)));
+    const timestamp = minTime + relative * timeSpan;
+    const selectedPoints = series.map((item) => ({ item, point: nearestChartPoint(item.points, timestamp) }));
+    const shownTime = selectedPoints[0].point[0];
+    const cursor = $(".chart-cursor", container), tooltip = $(".chart-tooltip", container);
+    const chartX = xFor(shownTime);
+    cursor.setAttribute("x1", String(chartX)); cursor.setAttribute("x2", String(chartX)); cursor.setAttribute("visibility", "visible");
+    tooltip.hidden = false;
+    tooltip.innerHTML = `<b>${esc(formatTime(new Date(shownTime).toISOString()))}</b>${selectedPoints.map(({ item, point }) => `<span><i class="${item.className}"></i>${esc(item.name)}: <strong>${esc(formatValue(point[1]))}</strong></span>`).join("")}`;
+  };
+  container.onpointerleave = () => { const cursor = $(".chart-cursor", container), tooltip = $(".chart-tooltip", container); if (cursor) cursor.setAttribute("visibility", "hidden"); if (tooltip) tooltip.hidden = true; };
+  return true;
 }
 
 function drawChart() {
@@ -889,46 +949,11 @@ function drawChart() {
     container.innerHTML = '<div class="empty">История этой метрики пока не накоплена</div>';
     return;
   }
-  const width = 1000;
-  const height = 270;
-  const margin = { top: 14, right: 18, bottom: 30, left: 76 };
   const rawMax = Math.max(...allValues);
-  const rawMin = metric === "online" ? Math.min(...allValues) : 0;
-  const max = rawMax === rawMin ? rawMax + 1 : rawMax;
-  const min = rawMin;
-  const span = max - min || 1;
-  const xFor = (index) => margin.left + index * (width - margin.left - margin.right) / Math.max(1, history.length - 1);
-  const yFor = (value) => margin.top + (max - value) * (height - margin.top - margin.bottom) / span;
-  const firstPath = chartPath(history, 0, xFor, yFor);
-  const secondPath = metric === "network" ? chartPath(history, 1, xFor, yFor) : "";
-  const areaPoints = history.map((sample, index) => {
-    const value = sampleValues(sample)[0];
-    return value === null ? null : [xFor(index), yFor(value)];
-  }).filter(Boolean);
-  const areaPath = areaPoints.length > 1
-    ? `M${areaPoints[0][0]},${height - margin.bottom} L${areaPoints.map(([x, y]) => `${x},${y}`).join(" L")} L${areaPoints.at(-1)[0]},${height - margin.bottom} Z`
-    : "";
-  const grid = Array.from({ length: 5 }, (_, index) => {
-    const ratio = index / 4;
-    const y = margin.top + ratio * (height - margin.top - margin.bottom);
-    const value = max - ratio * span;
-    return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 9}" y="${y + 3}" text-anchor="end">${esc(metricValue(value))}</text>`;
-  }).join("");
-  const xLabels = [0, Math.floor((history.length - 1) / 2), history.length - 1].map((index) => {
-    const sample = history[index];
-    return `<text class="chart-axis-label" x="${xFor(index)}" y="${height - 8}" text-anchor="${index === 0 ? "start" : index === history.length - 1 ? "end" : "middle"}">${esc(formatTime(sample.created_at))}</text>`;
-  }).join("");
-  container.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Интерактивный график">
-      <defs><linearGradient id="chart-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2dd4bf" stop-opacity=".26"/><stop offset="1" stop-color="#2dd4bf" stop-opacity="0"/></linearGradient></defs>
-      ${grid}${xLabels}
-      ${areaPath ? `<path class="chart-area" d="${areaPath}"/>` : ""}
-      <path class="chart-line" d="${firstPath}"/>
-      ${secondPath ? `<path class="chart-line tx-line" d="${secondPath}"/>` : ""}
-      <line class="chart-cursor" x1="0" y1="${margin.top}" x2="0" y2="${height - margin.bottom}" visibility="hidden"/>
-    </svg>
-    <div class="chart-tooltip" hidden></div>
-  `;
+  const chartSeries = metric === "network"
+    ? [{ name: "RX", className: chartSeriesClass(0), points: history.map((sample) => [new Date(sample.created_at).getTime(), finite(sample.rx_bps)]).filter(([, value]) => value !== null) }, { name: "TX", className: chartSeriesClass(1), points: history.map((sample) => [new Date(sample.created_at).getTime(), finite(sample.tx_bps)]).filter(([, value]) => value !== null) }]
+    : [{ name: metric === "online" ? "Онлайн" : metric === "cpu_percent" ? "CPU" : "RAM", className: chartSeriesClass(0), points: history.map((sample) => [new Date(sample.created_at).getTime(), finite(sample[metric])]).filter(([, value]) => value !== null) }];
+  renderTimeChart(container, chartSeries, metricValue, metric === "online" || metric === "network" ? { min: 0 } : { min: 0, max: 100 });
   const latest = history.at(-1);
   const latestValues = sampleValues(latest);
   $("#chart-current").textContent = metric === "network"
@@ -936,31 +961,6 @@ function drawChart() {
     : metricValue(latestValues[0]);
   $("#chart-max").textContent = metricValue(rawMax);
   $("#chart-min").textContent = metricValue(Math.min(...allValues));
-  container.onpointermove = (event) => {
-    const rect = container.getBoundingClientRect();
-    const relative = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-    const index = Math.round(relative * (history.length - 1));
-    const sample = history[index];
-    const values = sampleValues(sample);
-    const tooltip = $(".chart-tooltip", container);
-    const cursor = $(".chart-cursor", container);
-    const x = margin.left + relative * (width - margin.left - margin.right);
-    tooltip.hidden = false;
-    tooltip.style.left = `${relative * 100}%`;
-    tooltip.style.top = `${Math.max(52, event.clientY - rect.top)}px`;
-    tooltip.innerHTML = metric === "network"
-      ? `<b>${esc(formatTime(sample.created_at))}</b><br>RX ${esc(metricValue(values[0]))}<br>TX ${esc(metricValue(values[1]))}`
-      : `<b>${esc(formatTime(sample.created_at))}</b><br>${esc(metricValue(values[0]))}`;
-    cursor.setAttribute("x1", String(x));
-    cursor.setAttribute("x2", String(x));
-    cursor.setAttribute("visibility", "visible");
-  };
-  container.onpointerleave = () => {
-    const tooltip = $(".chart-tooltip", container);
-    const cursor = $(".chart-cursor", container);
-    if (tooltip) tooltip.hidden = true;
-    if (cursor) cursor.setAttribute("visibility", "hidden");
-  };
 }
 
 function dpiStatus(job) {
@@ -1091,12 +1091,13 @@ async function loadDpi() {
       return `
         <div class="dpi-job">
           <div class="dpi-job-head">${flag(node.country_code)}<span class="dpi-job-node"><b>${esc(node.name || "Нода")}</b><small>${esc(job.target || node.address || "—")} · ${esc(checkLabel)}</small></span><span class="dpi-result-state ${resultClass}" title="${esc(resultLabel)}"><i></i>${resultSummary}</span><span class="dpi-job-status">${esc(statusLabel)}</span></div>
-          <div class="progress-track ${["active", "pending"].includes(status) ? "is-running" : ""}"><i style="width:${Math.max(3, Math.min(100, percentDone))}%"></i></div>
+          <div class="progress-track ${["active", "pending"].includes(status) ? "is-running" : ""}"><i data-progress-width="${Math.max(3, Math.min(100, percentDone))}"></i></div>
           <div class="dpi-job-foot"><span>${esc(note)}</span><time>${formatTime(job.updated_at || job.created_at)}</time></div>
           <details class="dpi-json"><summary>Открыть полную информацию</summary><div class="dpi-detail-grid"><span><small>Нода</small><b>${esc(node.name || "—")}</b></span><span><small>IP</small><b>${esc(job.target || "—")}</b></span><span><small>Регион</small><b>${esc(checkLabel)}</b></span><span><small>Стоимость</small><b>${money(result.usd_cost || result.estimated_cost || 0)}</b></span></div><pre>${jsonHighlight(result)}</pre></details>
         </div>
       `;
     }).join("") : '<div class="empty">Проверок пока нет</div>';
+    $$('[data-progress-width]', $("#dpi-result")).forEach((bar) => { bar.style.width = `${bar.dataset.progressWidth}%`; });
     clearTimeout(dpiTimer);
     if (jobs.some((job) => ["active", "pending"].includes(dpiStatus(job)))) {
       dpiTimer = setTimeout(loadDpi, 5000);
@@ -1107,16 +1108,34 @@ async function loadDpi() {
   }
 }
 
+function scheduleMetricsHistoryLoad() {
+  clearTimeout(metricsLoadTimer);
+  metricsLoadTimer = setTimeout(() => {
+    metricsLoadTimer = null;
+    loadMetricsHistory();
+  }, 120);
+}
+
 async function loadMetricsHistory() {
-  const days = Number($("#metrics-days").value || 1);
-  const query = new URLSearchParams({ days: String(days), nodes: [...metricsSelected].join(",") });
+  clearTimeout(metricsLoadTimer);
+  metricsLoadTimer = null;
+  const sequence = ++metricsLoadSequence;
+  const period = $("#metrics-days").value;
+  const query = new URLSearchParams({ days: period === "custom" ? "1" : period, nodes: [...metricsSelected].join(",") });
+  if (period === "custom" && metricsDateFrom && metricsDateTo) {
+    query.set("date_from", metricsDateFrom);
+    query.set("date_to", metricsDateTo);
+  }
   $("#metrics-chart").innerHTML = '<div class="empty">Загрузка истории…</div>';
   try {
     const response = await fetch(`/api/metrics/history?${query}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    metricsData = await response.json();
+    const payload = await response.json();
+    if (sequence !== metricsLoadSequence) return;
+    metricsData = payload;
     renderMetricsHistory();
   } catch (error) {
+    if (sequence !== metricsLoadSequence) return;
     $("#metrics-chart").innerHTML = `<div class="empty">Не удалось загрузить историю: ${esc(error.message)}</div>`;
   }
 }
@@ -1137,19 +1156,19 @@ function metricHistoryFormat(value, kind) {
 function renderMetricsHistory() {
   const kind = $("#metrics-kind").value;
   const labels = { online: "Онлайн", cpu_percent: "CPU", ram_percent: "RAM", rx_bps: "RX", tx_bps: "TX" };
-  const series = (metricsData.series || []).map((item, index) => ({ ...item, color: ONLINE_COLORS[index % ONLINE_COLORS.length], points: (item.samples || []).map((sample) => [new Date(sample.created_at).getTime(), metricHistoryValue(sample, kind)]).filter(([, value]) => value !== null) })).filter((item) => item.points.length);
+  const series = (metricsData.series || []).map((item, index) => ({ name: item.node.name, node: item.node, className: chartSeriesClass(index), points: (item.samples || []).map((sample) => [new Date(sample.created_at).getTime(), metricHistoryValue(sample, kind)]).filter(([, value]) => value !== null) })).filter((item) => item.points.length);
   const points = series.flatMap((item) => item.points);
   $("#metrics-chart-title").textContent = labels[kind] || kind;
-  $("#metrics-chart-caption").innerHTML = series.map((item) => `<span class="online-legend"><i style="background:${item.color}"></i>${esc(item.node.name)}</span>`).join("");
+  $("#metrics-chart-caption").innerHTML = series.map((item) => `<span class="online-legend"><i class="${item.className}"></i>${esc(item.node.name)}</span>`).join("");
   $("#metrics-node-cards").innerHTML = series.map((item) => `<article class="online-node-card">${flag(item.node.country_code)}<span><b>${esc(item.node.name)}</b><small>${esc(item.node.address)}</small></span><strong>${metricHistoryFormat(item.points.at(-1)[1], kind)}</strong></article>`).join("");
   if (!points.length) { $("#metrics-chart").innerHTML = '<div class="empty">Нет данных за выбранный период</div>'; $("#metrics-summary").innerHTML = ""; return; }
-  const values = points.map(([, value]) => value), currentValues = series.map((item) => item.points.at(-1)[1]), currentTotal = currentValues.reduce((sum, value) => sum + value, 0), current = ["cpu_percent", "ram_percent"].includes(kind) ? currentTotal / Math.max(1, currentValues.length) : currentTotal, maximum = Math.max(...values), minimum = Math.min(...values);
-  $("#metrics-summary").innerHTML = `<article class="summary-card"><span>Сейчас</span><b>${metricHistoryFormat(current, kind)}</b></article><article class="summary-card"><span>Максимум</span><b>${metricHistoryFormat(maximum, kind)}</b></article><article class="summary-card"><span>Минимум</span><b>${metricHistoryFormat(minimum, kind)}</b></article>`;
-  const width = 1000, height = 300, margin = { top: 15, right: 18, bottom: 28, left: 78 }, max = Math.max(kind === "online" ? 1 : 100, maximum), min = kind === "online" ? 0 : Math.min(0, minimum), span = Math.max(1, max - min), minTime = Math.min(...points.map(([time]) => time)), maxTime = Math.max(...points.map(([time]) => time));
-  const xFor = (time) => margin.left + (time - minTime) * (width - margin.left - margin.right) / Math.max(1, maxTime - minTime), yFor = (value) => margin.top + (max - value) * (height - margin.top - margin.bottom) / span;
-  const grid = Array.from({ length: 5 }, (_, index) => { const value = max - index / 4 * span, y = yFor(value); return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 9}" y="${y + 3}" text-anchor="end">${esc(metricHistoryFormat(value, kind))}</text>`; }).join("");
-  const lines = series.map((item) => `<path class="online-node-line" style="stroke:${item.color}" d="${item.points.map(([time, value], index) => `${index ? "L" : "M"}${xFor(time).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>`).join("");
-  $("#metrics-chart").innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">${grid}${lines}</svg>`;
+  const currentValues = series.map((item) => item.points.at(-1)[1]), currentTotal = currentValues.reduce((sum, value) => sum + value, 0), averaged = ["cpu_percent", "ram_percent"].includes(kind), current = averaged ? currentTotal / Math.max(1, currentValues.length) : currentTotal;
+  let maximum = -Infinity, minimum = Infinity;
+  points.forEach(([, value]) => { maximum = Math.max(maximum, value); minimum = Math.min(minimum, value); });
+  const historical = $("#metrics-days").value === "custom", multiple = series.length > 1;
+  const currentLabel = multiple ? `${averaged ? "Среднее" : "Всего"} ${historical ? "на конец" : "сейчас"}` : historical ? "На конец периода" : "Сейчас";
+  $("#metrics-summary").innerHTML = `<article class="summary-card"><span>${currentLabel}</span><b>${metricHistoryFormat(current, kind)}</b></article><article class="summary-card"><span>${multiple ? "Максимум ноды" : "Максимум"}</span><b>${metricHistoryFormat(maximum, kind)}</b></article><article class="summary-card"><span>${multiple ? "Минимум ноды" : "Минимум"}</span><b>${metricHistoryFormat(minimum, kind)}</b></article>`;
+  renderTimeChart($("#metrics-chart"), series, (value) => metricHistoryFormat(value, kind), ["cpu_percent", "ram_percent"].includes(kind) ? { min: 0, max: 100 } : { min: 0 });
 }
 
 async function loadLogs() {
@@ -1286,8 +1305,32 @@ $("#node-sort").addEventListener("change", renderNodes);
 $("#event-search").addEventListener("input", renderEvents);
 $("#event-filter").addEventListener("change", renderEvents);
 $("#metrics-kind").addEventListener("change", renderMetricsHistory);
-$("#metrics-days").addEventListener("change", loadMetricsHistory);
-$("#metrics-node-options").addEventListener("change", () => { metricsSelected = new Set(checked("#metrics-node-options")); $("#metrics-node-count").textContent = metricsSelected.size ? `Выбрано: ${metricsSelected.size}` : "Все ноды"; loadMetricsHistory(); });
+$("#metrics-days").addEventListener("change", () => {
+  if ($("#metrics-days").value === "custom") {
+    $("#metrics-calendar").open = true;
+    return;
+  }
+  metricsDateFrom = ""; metricsDateTo = "";
+  loadMetricsHistory();
+});
+$("#metrics-node-options").addEventListener("change", () => { metricsSelected = new Set(checked("#metrics-node-options")); $("#metrics-node-count").textContent = metricsSelected.size ? `Выбрано: ${metricsSelected.size}` : "Все ноды"; scheduleMetricsHistoryLoad(); });
+$("#metrics-date-apply").addEventListener("click", () => {
+  const from = $("#metrics-date-from").value, to = $("#metrics-date-to").value;
+  if (!from || !to) { toast("Выберите обе даты", true); return; }
+  if (from > to) { toast("Дата начала должна быть раньше даты окончания", true); return; }
+  metricsDateFrom = from; metricsDateTo = to; $("#metrics-days").value = "custom"; $("#metrics-calendar").open = false; loadMetricsHistory();
+});
+$("#metrics-date-reset").addEventListener("click", () => {
+  metricsDateFrom = ""; metricsDateTo = ""; $("#metrics-days").value = "1"; $("#metrics-calendar").open = false; loadMetricsHistory();
+});
+{
+  const today = new Date(), weekAgo = new Date(today.getTime() - 6 * 86400000);
+  const localDate = (value) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  $("#metrics-date-from").value = localDate(weekAgo);
+  $("#metrics-date-to").value = localDate(today);
+  $("#metrics-date-from").max = localDate(today);
+  $("#metrics-date-to").max = localDate(today);
+}
 $("#clear-events").addEventListener("click", async (event) => {
   if (!state.events.length) {
     toast("Событий для очистки нет");
@@ -1344,9 +1387,9 @@ $$('[data-node-panel]').forEach((button) => button.addEventListener("click", () 
   $$('.node-panel').forEach((item) => item.classList.toggle("active", item.dataset.panel === panel));
 }));
 
-$$(".range-tabs button").forEach((button) => {
+$$("#node-dialog .range-tabs button").forEach((button) => {
   button.addEventListener("click", async () => {
-    $$(".range-tabs button").forEach((item) => item.classList.remove("active"));
+    $$("#node-dialog .range-tabs button").forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     days = Number(button.dataset.days);
     await loadHistory();
