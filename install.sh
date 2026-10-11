@@ -255,7 +255,9 @@ EOF
 
 deploy(){
   info "Собираю Docker-образ..."
-  docker build --network=host -t remnadown-app:latest .
+  local remnadown_version="unknown"
+  if [[ -d .git ]]; then remnadown_version="$(git rev-parse --short=7 HEAD)"; fi
+  docker build --network=host --build-arg "REMNADOWN_VERSION=$remnadown_version" -t remnadown-app:latest .
   docker compose up -d app
   if [[ "$PROXY_MODE" == bundled-caddy ]]; then docker compose --profile bundled-proxy up -d caddy; fi
   if [[ "$PROXY_MODE" == system-caddy ]]; then configure_system_caddy; fi

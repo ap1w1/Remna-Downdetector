@@ -7,6 +7,7 @@ import html
 import ipaddress
 import json
 import logging
+import os
 import re
 import secrets
 import socket
@@ -48,6 +49,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 ROOT = Path(__file__).parent
 logger = logging.getLogger("remnadown")
+APP_VERSION = os.getenv("REMNADOWN_VERSION", "unknown").strip() or "unknown"
+UPDATE_CHECK_URL = "https://api.github.com/repos/ap1w1/Remna-Downdetector/commits/master"
+REPOSITORY_URL = "https://github.com/ap1w1/Remna-Downdetector"
 
 
 class DatabaseLogHandler(logging.Handler):
@@ -76,10 +80,35 @@ managed_domains_cache: dict[str, Any] | None = None
 managed_domains_cache_at = 0.0
 managed_domains_cache_lock = asyncio.Lock()
 MANAGED_DOMAINS_CACHE_SECONDS = 300
+update_cache: dict[str, Any] = {"checked_at": 0.0, "latest": APP_VERSION}
+update_cache_lock = asyncio.Lock()
+UPDATE_CACHE_SECONDS = 1800
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+async def application_version() -> dict[str, Any]:
+    now = time.monotonic()
+    if now - float(update_cache["checked_at"]) >= UPDATE_CACHE_SECONDS:
+        async with update_cache_lock:
+            if now - float(update_cache["checked_at"]) >= UPDATE_CACHE_SECONDS:
+                try:
+                    async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
+                        response = await client.get(UPDATE_CHECK_URL, headers={"User-Agent": f"RemnaDown/{APP_VERSION}"})
+                        response.raise_for_status()
+                    latest = str(response.json().get("sha", ""))
+                    if not re.fullmatch(r"[0-9a-f]{40}", latest):
+                        raise ValueError("Unexpected GitHub commit response")
+                    update_cache["latest"] = latest[:7]
+                    update_cache["error"] = ""
+                except Exception as exc:
+                    update_cache["error"] = str(exc)[:200]
+                update_cache["checked_at"] = time.monotonic()
+    latest = str(update_cache.get("latest") or APP_VERSION)
+    update_available = APP_VERSION != "unknown" and latest != APP_VERSION and not latest.startswith(APP_VERSION) and not APP_VERSION.startswith(latest)
+    return {"current": APP_VERSION, "latest": latest, "update_available": update_available, "repository_url": REPOSITORY_URL, "check_error": str(update_cache.get("error", ""))}
 
 
 def integration_error(exc: Exception) -> str:
@@ -125,7 +154,7 @@ def init_db() -> None:
                 ("temp_user_uuid", "TEXT NOT NULL DEFAULT ''"),
                 ("context", "TEXT NOT NULL DEFAULT '{}'"),
             ],
-            "node_state": [("is_unavailable", "INTEGER NOT NULL DEFAULT 0"), ("cpu_alert", "INTEGER NOT NULL DEFAULT 0"), ("ram_alert", "INTEGER NOT NULL DEFAULT 0"), ("rx_alert", "INTEGER NOT NULL DEFAULT 0"), ("tx_alert", "INTEGER NOT NULL DEFAULT 0")],
+            "node_state": [("is_unavailable", "INTEGER NOT NULL DEFAULT 0"), ("cpu_alert", "INTEGER NOT NULL DEFAULT 0"), ("ram_alert", "INTEGER NOT NULL DEFAULT 0"), ("rx_alert", "INTEGER NOT NULL DEFAULT 0"), ("tx_alert", "INTEGER NOT NULL DEFAULT 0"), ("baseline_online", "REAL")],
         }
         migrations["node_settings"].append(("dpi_squad_uuids", "TEXT NOT NULL DEFAULT '[]'"))
         for table, columns in migrations.items():
@@ -421,10 +450,12 @@ async def process_node(node: dict[str, Any]) -> None:
         threshold = float(config["drop_percent"] if config and config["drop_percent"] is not None else settings.default_drop_percent)
         rows = db.execute("SELECT online FROM samples WHERE node_uuid=? ORDER BY id DESC LIMIT ?", (node["uuid"], settings.baseline_samples + 1)).fetchall()
         previous = [row["online"] for row in rows[1:] if row["online"] >= 0]
-        baseline = sorted(previous)[len(previous) // 2] if previous else node["online"]
+        rolling_baseline = sorted(previous)[len(previous) // 2] if previous else node["online"]
+        state = db.execute("SELECT * FROM node_state WHERE node_uuid=?", (node["uuid"],)).fetchone()
+        stored_baseline = float(state["baseline_online"]) if state and state["baseline_online"] is not None else None
+        baseline = stored_baseline if state and (state["bad_count"] > 0 or state["is_down"]) and stored_baseline else rolling_baseline
         drop = 0.0 if not node["connected"] else (max(0.0, (baseline - node["online"]) / baseline * 100) if baseline else 0.0)
         sample.update({"baseline": baseline, "drop_percent": round(drop, 2)})
-        state = db.execute("SELECT * FROM node_state WHERE node_uuid=?", (node["uuid"],)).fetchone()
         is_down = bool(state["is_down"]) if state else False
         was_unavailable = bool(state["is_unavailable"]) if state else False
         is_unavailable = not node["connected"]
@@ -433,6 +464,7 @@ async def process_node(node: dict[str, Any]) -> None:
         else:
             bad_count = (state["bad_count"] if state else 0) + 1 if drop >= threshold else 0
             good_count = (state["good_count"] if state else 0) + 1 if drop < threshold else 0
+        next_baseline = baseline if bad_count or is_down else rolling_baseline
         if is_unavailable and not was_unavailable:
             event = "node.unavailable"
         elif not is_unavailable and was_unavailable:
@@ -449,7 +481,7 @@ async def process_node(node: dict[str, Any]) -> None:
             alerts[name] = int(active)
             if active and not was_alert:
                 resource_events.append(f"node.{name}_threshold")
-        db.execute("INSERT INTO node_state(node_uuid,is_down,bad_count,good_count,is_unavailable,cpu_alert,ram_alert,rx_alert,tx_alert,changed_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(node_uuid) DO UPDATE SET is_down=excluded.is_down,bad_count=excluded.bad_count,good_count=excluded.good_count,is_unavailable=excluded.is_unavailable,cpu_alert=excluded.cpu_alert,ram_alert=excluded.ram_alert,rx_alert=excluded.rx_alert,tx_alert=excluded.tx_alert,changed_at=CASE WHEN is_down!=excluded.is_down OR is_unavailable!=excluded.is_unavailable THEN excluded.changed_at ELSE changed_at END", (node["uuid"], int(is_down), bad_count, good_count, int(is_unavailable), alerts["cpu"], alerts["ram"], alerts["rx"], alerts["tx"], now))
+        db.execute("INSERT INTO node_state(node_uuid,is_down,bad_count,good_count,is_unavailable,cpu_alert,ram_alert,rx_alert,tx_alert,baseline_online,changed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(node_uuid) DO UPDATE SET is_down=excluded.is_down,bad_count=excluded.bad_count,good_count=excluded.good_count,is_unavailable=excluded.is_unavailable,cpu_alert=excluded.cpu_alert,ram_alert=excluded.ram_alert,rx_alert=excluded.rx_alert,tx_alert=excluded.tx_alert,baseline_online=excluded.baseline_online,changed_at=CASE WHEN is_down!=excluded.is_down OR is_unavailable!=excluded.is_unavailable THEN excluded.changed_at ELSE changed_at END", (node["uuid"], int(is_down), bad_count, good_count, int(is_unavailable), alerts["cpu"], alerts["ram"], alerts["rx"], alerts["tx"], next_baseline, now))
         if event:
             db.execute("INSERT INTO events(node_uuid,event,payload,created_at) VALUES(?,?,?,?)", (node["uuid"], event, json.dumps(sample), now))
         for resource_event in resource_events:
@@ -1319,6 +1351,7 @@ async def dashboard_data(_: str = Depends(require_user)):
         panel_settings["remnawave_detected_version"] = await app.state.remna.panel_version()
     except Exception:
         panel_settings["remnawave_detected_version"] = "unknown"
+    panel_settings["application"] = await application_version()
     return {"nodes": nodes, "events": events, "webhooks": hooks, "settings": panel_settings, "integration_alerts": list(permission_alerts)}
 
 

@@ -108,6 +108,14 @@ function compactNumber(value) {
   return new Intl.NumberFormat("ru-RU").format(Math.max(0, finite(value) ?? 0));
 }
 
+function renderApplicationVersion() {
+  const application = state.settings.application || {};
+  const button = $("#version-button");
+  $("#current-version").textContent = application.current || "—";
+  button.classList.toggle("update-available", Boolean(application.update_available));
+  button.title = application.update_available ? `Доступна сборка ${application.latest}` : `Сборка RemnaDown ${application.current || ""}`.trim();
+}
+
 function formatUptime(value) {
   const seconds = finite(value);
   if (seconds === null || seconds < 0) return "—";
@@ -782,6 +790,7 @@ async function load({ force = false } = {}) {
     if (previousEvent && newestEvent > previousEvent && localStorage.getItem("remnadown-sound") === "on") beep();
     lastEvent = newestEvent;
     render();
+    renderApplicationVersion();
     fillAppSettings();
     if (selected) {
       selected = state.nodes.find((node) => node.uuid === selected.uuid) || null;
@@ -1603,6 +1612,14 @@ $("#sound-toggle").addEventListener("click", () => {
   if (enabled) beep();
 });
 $("#support-project").addEventListener("click", () => $("#support-dialog").showModal());
+$("#version-button").addEventListener("click", () => {
+  const application = state.settings.application || {};
+  $("#update-version-summary").textContent = application.update_available ? `Сборка ${application.current}, доступна ${application.latest}` : `Установлена сборка ${application.current || "—"}`;
+  $("#update-dialog-text").textContent = application.update_available ? "Доступно обновление RemnaDown. Выполните команды на сервере:" : "У вас установлена актуальная сборка RemnaDown. Для принудительного обновления выполните:";
+  $("#update-dialog").showModal();
+});
+$$('[data-close-update]').forEach((button) => button.addEventListener("click", () => $("#update-dialog").close()));
+$("#update-dialog").addEventListener("click", (event) => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 $("#support-dialog .dialog-close").addEventListener("click", () => $("#support-dialog").close());
 $("#support-dialog").addEventListener("click", (event) => { const wallet = event.target.closest("[data-wallet]"); if (wallet) navigator.clipboard.writeText(wallet.dataset.wallet).then(() => toast("Адрес скопирован")); else if (event.target === event.currentTarget) event.currentTarget.close(); });
 $("#vless-mode").addEventListener("change", syncVlessSource);

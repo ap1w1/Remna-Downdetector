@@ -9,7 +9,7 @@
   <title>RemnaDownDetector</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
   <link rel="stylesheet" href="/static/app.css?v=20261009-2">
-  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-30">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-31">
 </head>
 <body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
   <div class="app-shell">
@@ -72,6 +72,10 @@
         <a class="icon-button community-link github-link" href="https://github.com/ap1w1/Remna-Downdetector" target="_blank" rel="noopener noreferrer" title="GitHub" aria-label="Открыть GitHub проекта">
           <img src="/static/github.svg?v=20261011-1" alt="">
         </a>
+        <button id="version-button" class="version-button" type="button" title="Сборка RemnaDown" aria-label="Сборка RemnaDown">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-7 4 14 2-7h5"/></svg>
+          <span id="current-version">—</span>
+        </button>
         <a class="icon-button community-link telegram-link" href="https://t.me/remnadown" target="_blank" rel="noopener noreferrer" title="Telegram" aria-label="Открыть Telegram проекта">
           <svg fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M23.91 3.79 20.3 20.82c-.27 1.2-.98 1.49-1.98.93l-5.5-4.05-2.65 2.55c-.29.29-.54.54-1.11.54l.39-5.6L19.65 6c.44-.39-.1-.61-.68-.22L6.36 13.72.93 12.02c-1.18-.37-1.2-1.18.25-1.75L22.4 2.09c.98-.36 1.84.22 1.51 1.7Z"/></svg>
         </a>
@@ -389,6 +393,8 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <dialog id="activate-ip-dialog" class="compact-dialog confirm-ip-dialog"><form method="dialog" id="activate-ip-form"><div class="dialog-header"><div class="dialog-title"><span class="theme-icon violet">IP</span><div><h2>Установить IP-адрес</h2><p id="activate-ip-address">—</p></div></div><button class="dialog-close" type="button" data-close-ip-dialog aria-label="Закрыть">×</button></div><div class="confirm-question"><b>1. Изменить основной IP ноды?</b><div><label><input type="radio" name="confirm_ip" value="yes"> Да</label><label><input type="radio" name="confirm_ip" value="no"> Нет</label></div></div><div class="confirm-question"><b>2. Обновить IP у всех привязанных доменов?</b><div><label><input type="radio" name="confirm_dns" value="yes"> Да</label><label><input type="radio" name="confirm_dns" value="no"> Нет</label></div></div><p class="form-hint">Предыдущий основной IP будет добавлен последним в список резервных.</p><div class="dialog-actions"><button class="secondary-button" type="button" data-close-ip-dialog>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
   <dialog id="support-dialog" class="support-dialog"><button class="dialog-close" type="button" aria-label="Закрыть">×</button><div class="support-hero"><span>♥</span><div><h2>Поддержать проект</h2><p>Спасибо за поддержку развития RemnaDownDetector</p></div></div><div class="wallet-list"><button type="button" data-wallet="TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa"><b>USDT TRC20</b><code>TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa</code><span>Копировать</span></button><button type="button" data-wallet="UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN"><b>USDT TON</b><code>UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN</code><span>Копировать</span></button><button type="button" data-wallet="0x1B7905b1F335cdA649100f660d824018e6dE60A2"><b>USDT BEP20</b><code>0x1B7905b1F335cdA649100f660d824018e6dE60A2</code><span>Копировать</span></button><button type="button" data-wallet="bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy"><b>BTC</b><code>bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy</code><span>Копировать</span></button></div><div class="support-services"><a href="https://t.me/send?start=IV112jEOQ7s1" target="_blank" rel="noopener noreferrer"><span>↗</span><b>CryptoBot</b></a><a href="https://t.me/xrocket?start=inv_XGcVb2B8xfpV6Wi" target="_blank" rel="noopener noreferrer"><span>↗</span><b>XRocket</b></a></div></dialog>
+  <dialog id="update-dialog" class="compact-dialog update-dialog"><div class="dialog-header"><div class="dialog-title"><h2>Обновление RemnaDown</h2><p id="update-version-summary">Проверка сборки…</p></div><button class="dialog-close" type="button" data-close-update aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m5 5 14 14M19 5 5 19"/></svg></button></div><div class="update-dialog-body"><p id="update-dialog-text">У вас установлена актуальная сборка.</p><pre><code>cd /opt/remnadown
+sudo bash update.sh</code></pre><p>Скрипт загрузит изменения, пересоберёт контейнер и проверит работоспособность сервиса.</p></div><div class="dialog-actions"><button class="primary-button" type="button" data-close-update>Понятно</button></div></dialog>
   <dialog id="dpi-token-dialog" class="compact-dialog dpi-token-dialog"><form method="dialog" id="dpi-token-form"><div class="dialog-header"><div class="dialog-title"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>API-токен DPI Checker</h2><p>Новый токен будет сохранён после подтверждения</p></div></div><button class="dialog-close" type="button" data-close-dpi-token aria-label="Закрыть">×</button></div><div class="dpi-token-dialog-body"><label>API-токен<input form="app-settings" name="dpi_api_key" type="password" placeholder="Введите новый токен" autocomplete="new-password"></label></div><div class="dialog-actions"><button class="secondary-button dialog-secondary-button" type="button" data-close-dpi-token>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
   <script src="/static/app.js?v=20261011-31"></script>
 </body>
