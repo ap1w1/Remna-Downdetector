@@ -53,6 +53,7 @@ let metricsDateTo = "";
 let metricsLoadSequence = 0;
 let metricsLoadTimer = null;
 let historyLoadSequence = 0;
+let chartInstanceSequence = 0;
 
 const esc = (value) => String(value ?? "").replace(
   /[&<>"']/g,
@@ -69,8 +70,9 @@ function enhanceCompactPickers() {
     const popover = $(".region-picker-popover", picker);
     if (!popover || $(".picker-actions", popover)) return;
     popover.insertAdjacentHTML("beforeend", '<div class="picker-actions"><button type="button" data-picker-all>Выбрать все</button><button type="button" data-picker-clear>Очистить</button><button type="button" data-picker-done>Готово</button></div>');
-    $("[data-picker-all]", popover).addEventListener("click", () => { $$("input[type='checkbox']", popover).forEach((input) => { input.checked = true; input.dispatchEvent(new Event("change", { bubbles: true })); }); });
-    $("[data-picker-clear]", popover).addEventListener("click", () => { $$("input[type='checkbox']", popover).forEach((input) => { input.checked = false; input.dispatchEvent(new Event("change", { bubbles: true })); }); });
+    const visibleInputs = () => $$("input[type='checkbox']", popover).filter((input) => !input.closest("label")?.hidden);
+    $("[data-picker-all]", popover).addEventListener("click", () => { visibleInputs().forEach((input) => { input.checked = true; input.dispatchEvent(new Event("change", { bubbles: true })); }); });
+    $("[data-picker-clear]", popover).addEventListener("click", () => { visibleInputs().forEach((input) => { input.checked = false; input.dispatchEvent(new Event("change", { bubbles: true })); }); });
     $("[data-picker-done]", popover).addEventListener("click", () => { picker.open = false; });
     picker.addEventListener("toggle", () => { if (picker.open) $$("details.region-picker[open], details.date-range-picker[open]").filter((item) => item !== picker).forEach((item) => { item.open = false; }); });
   });
@@ -516,6 +518,16 @@ function checked(selector) {
   return $$(`${selector} input:checked`).map((input) => input.value);
 }
 
+function filterMetricNodeOptions() {
+  const query = $("#metrics-node-search")?.value.trim().toLowerCase() || "";
+  let visible = 0;
+  $$("#metrics-node-options label").forEach((label) => {
+    label.hidden = Boolean(query) && !label.textContent.toLowerCase().includes(query);
+    if (!label.hidden) visible += 1;
+  });
+  $("#metrics-node-empty").hidden = visible > 0;
+}
+
 function renderIpPool(node) {
   $("#max-ip-replacements").value = node.max_ip_replacements ?? 1;
   const items = node.ip_pool || [];
@@ -796,7 +808,10 @@ async function load({ force = false } = {}) {
       integration_alerts: Array.isArray(payload.integration_alerts) ? payload.integration_alerts : [],
     };
     const metricChoices = $("#metrics-node-options");
-    if (metricChoices) metricChoices.innerHTML = state.nodes.map((node) => `<label><input type="checkbox" value="${esc(node.uuid)}" ${metricsSelected.has(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></label>`).join("");
+    if (metricChoices) {
+      metricChoices.innerHTML = state.nodes.map((node) => `<label><input type="checkbox" value="${esc(node.uuid)}" ${metricsSelected.has(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></label>`).join("");
+      filterMetricNodeOptions();
+    }
     const integrationAlert = state.integration_alerts[0];
     if (integrationAlert && integrationAlert.id !== lastIntegrationAlert) {
       lastIntegrationAlert = integrationAlert.id;
@@ -901,41 +916,140 @@ function renderTimeChart(container, inputSeries, formatValue, bounds = {}) {
   const series = inputSeries.map((item, index) => ({ ...item, className: item.className || chartSeriesClass(index), points: item.points.filter(([timestamp, value]) => Number.isFinite(timestamp) && Number.isFinite(value)).sort((left, right) => left[0] - right[0]) })).filter((item) => item.points.length);
   const points = series.flatMap((item) => item.points);
   if (!points.length) return false;
-  let rawMin = Infinity, rawMax = -Infinity, minTime = Infinity, maxTime = -Infinity;
+  let rawMin = Infinity, rawMax = -Infinity, fullMinTime = Infinity, fullMaxTime = -Infinity;
   points.forEach(([timestamp, value]) => {
     rawMin = Math.min(rawMin, value); rawMax = Math.max(rawMax, value);
-    minTime = Math.min(minTime, timestamp); maxTime = Math.max(maxTime, timestamp);
+    fullMinTime = Math.min(fullMinTime, timestamp); fullMaxTime = Math.max(fullMaxTime, timestamp);
   });
   let min = bounds.min ?? Math.min(0, rawMin);
   let max = bounds.max ?? rawMax;
   if (max <= min) max = min + Math.max(1, Math.abs(min) * 0.1);
   if (bounds.max === undefined) max += (max - min) * 0.06;
   const span = Math.max(1e-9, max - min);
-  const timeSpan = Math.max(1, maxTime - minTime);
   const width = Math.max(720, Math.round(container.clientWidth || 1000));
   const height = Math.max(260, Math.round(container.clientHeight || 300));
-  const margin = { top: 18, right: 20, bottom: 38, left: 88 };
+  const margin = { top: 48, right: 20, bottom: 38, left: 88 };
   const plotWidth = width - margin.left - margin.right, plotHeight = height - margin.top - margin.bottom;
-  const xFor = (timestamp) => margin.left + (timestamp - minTime) * plotWidth / timeSpan;
   const yFor = (value) => margin.top + (max - value) * plotHeight / span;
-  const horizontalGrid = Array.from({ length: 5 }, (_, index) => { const value = max - index / 4 * span, y = yFor(value); return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${esc(formatValue(value))}</text>`; }).join("");
-  const verticalGrid = Array.from({ length: 5 }, (_, index) => { const timestamp = minTime + index / 4 * timeSpan, x = xFor(timestamp); return `<line class="chart-grid chart-grid-vertical" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}"/><text class="chart-axis-label" x="${x}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === 4 ? "end" : "middle"}">${esc(chartDateLabel(timestamp, timeSpan))}</text>`; }).join("");
-  const paths = series.map((item) => `<path class="chart-line ${item.className}" d="${item.points.map(([timestamp, value], index) => `${index ? "L" : "M"}${xFor(timestamp).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>${item.points.length === 1 ? `<circle class="${item.className}" cx="${xFor(item.points[0][0])}" cy="${yFor(item.points[0][1])}" r="4"/>` : ""}`).join("");
-  container.innerHTML = `<svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="График метрик">${horizontalGrid}${verticalGrid}${paths}<line class="chart-cursor" x1="0" y1="${margin.top}" x2="0" y2="${height - margin.bottom}" visibility="hidden"/></svg><div class="chart-tooltip" hidden></div>`;
-  container.onpointermove = (event) => {
-    const rect = container.getBoundingClientRect();
-    const plotLeft = margin.left / width * rect.width, plotRight = margin.right / width * rect.width;
-    const relative = Math.max(0, Math.min(1, (event.clientX - rect.left - plotLeft) / Math.max(1, rect.width - plotLeft - plotRight)));
-    const timestamp = minTime + relative * timeSpan;
-    const selectedPoints = series.map((item) => ({ item, point: nearestChartPoint(item.points, timestamp) }));
-    const shownTime = selectedPoints[0].point[0];
-    const cursor = $(".chart-cursor", container), tooltip = $(".chart-tooltip", container);
-    const chartX = xFor(shownTime);
-    cursor.setAttribute("x1", String(chartX)); cursor.setAttribute("x2", String(chartX)); cursor.setAttribute("visibility", "visible");
-    tooltip.hidden = false;
-    tooltip.innerHTML = `<b>${esc(formatTime(new Date(shownTime).toISOString()))}</b>${selectedPoints.map(({ item, point }) => `<span><i class="${item.className}"></i>${esc(item.name)}: <strong>${esc(formatValue(point[1]))}</strong></span>`).join("")}`;
+  const fullTimeSpan = Math.max(1, fullMaxTime - fullMinTime);
+  const minimumTimeSpan = Math.max(1000, fullTimeSpan / 500);
+  const clipId = `chart-clip-${++chartInstanceSequence}`;
+  let viewMinTime = fullMinTime, viewMaxTime = fullMaxTime, drag = null;
+  container.classList.add("chart-enhanced");
+  container.innerHTML = `<div class="chart-controls"><span data-chart-window></span><button type="button" data-chart-zoom-in title="Увеличить" aria-label="Увеличить масштаб"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M10.5 7.5v6M7.5 10.5h6M15.5 15.5 21 21"/></svg></button><button type="button" data-chart-zoom-out title="Уменьшить" aria-label="Уменьшить масштаб"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M7.5 10.5h6M15.5 15.5 21 21"/></svg></button><button type="button" data-chart-reset title="Показать весь период" aria-label="Сбросить масштаб"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.35-5.65M4 5v7h7"/></svg></button></div><svg class="chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Интерактивный график метрик"></svg><div class="chart-tooltip" hidden></div>`;
+  const svg = $(".chart-svg", container), tooltip = $(".chart-tooltip", container), windowLabel = $("[data-chart-window]", container);
+
+  const clampView = (start, end) => {
+    let nextSpan = Math.max(minimumTimeSpan, Math.min(fullTimeSpan, end - start));
+    if (nextSpan >= fullTimeSpan) return [fullMinTime, fullMaxTime];
+    let nextStart = start;
+    if (nextStart < fullMinTime) nextStart = fullMinTime;
+    if (nextStart + nextSpan > fullMaxTime) nextStart = fullMaxTime - nextSpan;
+    return [nextStart, nextStart + nextSpan];
   };
-  container.onpointerleave = () => { const cursor = $(".chart-cursor", container), tooltip = $(".chart-tooltip", container); if (cursor) cursor.setAttribute("visibility", "hidden"); if (tooltip) tooltip.hidden = true; };
+
+  const visiblePoints = (itemPoints) => {
+    let start = itemPoints.findIndex(([timestamp]) => timestamp >= viewMinTime);
+    if (start < 0) start = itemPoints.length - 1;
+    start = Math.max(0, start - 1);
+    let end = start;
+    while (end < itemPoints.length && itemPoints[end][0] <= viewMaxTime) end += 1;
+    return itemPoints.slice(start, Math.min(itemPoints.length, end + 1));
+  };
+
+  const draw = () => {
+    const timeSpan = Math.max(1, viewMaxTime - viewMinTime);
+    const xFor = (timestamp) => margin.left + (timestamp - viewMinTime) * plotWidth / timeSpan;
+    const horizontalGrid = Array.from({ length: 5 }, (_, index) => { const value = max - index / 4 * span, y = yFor(value); return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${esc(formatValue(value))}</text>`; }).join("");
+    const verticalGrid = Array.from({ length: 5 }, (_, index) => { const timestamp = viewMinTime + index / 4 * timeSpan, x = xFor(timestamp); return `<line class="chart-grid chart-grid-vertical" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}"/><text class="chart-axis-label" x="${x}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === 4 ? "end" : "middle"}">${esc(chartDateLabel(timestamp, timeSpan))}</text>`; }).join("");
+    const paths = series.map((item) => { const shown = visiblePoints(item.points); return `<path class="chart-line ${item.className}" d="${shown.map(([timestamp, value], index) => `${index ? "L" : "M"}${xFor(timestamp).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>${shown.length === 1 ? `<circle class="${item.className}" cx="${xFor(shown[0][0])}" cy="${yFor(shown[0][1])}" r="4"/>` : ""}`; }).join("");
+    svg.innerHTML = `<defs><clipPath id="${clipId}"><rect x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}"/></clipPath></defs>${horizontalGrid}${verticalGrid}<g clip-path="url(#${clipId})">${paths}<line class="chart-cursor" x1="0" y1="${margin.top}" x2="0" y2="${height - margin.bottom}" visibility="hidden"/></g><rect class="chart-selection" x="0" y="${margin.top}" width="0" height="${plotHeight}" visibility="hidden"/>`;
+    windowLabel.textContent = `${chartDateLabel(viewMinTime, Math.max(timeSpan, 3 * 86400000))} — ${chartDateLabel(viewMaxTime, Math.max(timeSpan, 3 * 86400000))}`;
+    const isFull = Math.abs(viewMinTime - fullMinTime) < 1 && Math.abs(viewMaxTime - fullMaxTime) < 1;
+    $("[data-chart-zoom-in]", container).disabled = timeSpan <= minimumTimeSpan * 1.01;
+    $("[data-chart-zoom-out]", container).disabled = isFull;
+    $("[data-chart-reset]", container).disabled = isFull;
+    tooltip.hidden = true;
+  };
+
+  const setView = (start, end) => {
+    [viewMinTime, viewMaxTime] = clampView(start, end);
+    draw();
+  };
+
+  const zoom = (factor, anchor = (viewMinTime + viewMaxTime) / 2) => {
+    const currentSpan = viewMaxTime - viewMinTime;
+    const nextSpan = currentSpan * factor;
+    const ratio = currentSpan ? (anchor - viewMinTime) / currentSpan : 0.5;
+    setView(anchor - nextSpan * ratio, anchor + nextSpan * (1 - ratio));
+  };
+
+  const chartX = (event) => {
+    const rect = container.getBoundingClientRect();
+    return Math.max(margin.left, Math.min(width - margin.right, (event.clientX - rect.left) / rect.width * width));
+  };
+
+  const timeAtX = (x) => viewMinTime + (x - margin.left) / plotWidth * (viewMaxTime - viewMinTime);
+
+  svg.onpointermove = (event) => {
+    const x = chartX(event);
+    if (drag) {
+      if (drag.pan) {
+        const delta = (x - drag.startX) / plotWidth * drag.timeSpan;
+        setView(drag.viewMin - delta, drag.viewMax - delta);
+      } else {
+        const selection = $(".chart-selection", svg);
+        selection.setAttribute("x", String(Math.min(drag.startX, x)));
+        selection.setAttribute("width", String(Math.abs(x - drag.startX)));
+        selection.setAttribute("visibility", "visible");
+      }
+      return;
+    }
+    const timestamp = timeAtX(x);
+    const selectedPoints = series.map((item) => ({ item, point: nearestChartPoint(item.points, timestamp) }));
+    const cursor = $(".chart-cursor", svg);
+    cursor.setAttribute("x1", String(x)); cursor.setAttribute("x2", String(x)); cursor.setAttribute("visibility", "visible");
+    tooltip.hidden = false;
+    const tooltipPoints = selectedPoints.slice(0, 12);
+    tooltip.innerHTML = `<b>${esc(formatTime(new Date(timestamp).toISOString()))}</b>${tooltipPoints.map(({ item, point }) => `<span><i class="${item.className}"></i>${esc(item.name)}: <strong>${esc(formatValue(point[1]))}</strong></span>`).join("")}${selectedPoints.length > tooltipPoints.length ? `<em>Ещё нод: ${selectedPoints.length - tooltipPoints.length}</em>` : ""}`;
+  };
+
+  svg.onpointerdown = (event) => {
+    if (event.button !== 0) return;
+    const x = chartX(event);
+    drag = { startX: x, pan: event.shiftKey, viewMin: viewMinTime, viewMax: viewMaxTime, timeSpan: viewMaxTime - viewMinTime };
+    svg.classList.toggle("is-panning", drag.pan);
+    svg.classList.toggle("is-selecting", !drag.pan);
+    tooltip.hidden = true;
+    svg.setPointerCapture(event.pointerId);
+  };
+
+  const finishDrag = (event) => {
+    if (!drag) return;
+    const x = chartX(event), currentDrag = drag;
+    drag = null;
+    svg.classList.remove("is-panning", "is-selecting");
+    if (svg.hasPointerCapture(event.pointerId)) svg.releasePointerCapture(event.pointerId);
+    if (!currentDrag.pan && Math.abs(x - currentDrag.startX) >= 8) {
+      setView(timeAtX(Math.min(currentDrag.startX, x)), timeAtX(Math.max(currentDrag.startX, x)));
+    } else {
+      draw();
+    }
+  };
+
+  svg.onpointerup = finishDrag;
+  svg.onpointercancel = () => { drag = null; svg.classList.remove("is-panning", "is-selecting"); draw(); };
+  svg.onpointerleave = () => { if (!drag) { const cursor = $(".chart-cursor", svg); if (cursor) cursor.setAttribute("visibility", "hidden"); tooltip.hidden = true; } };
+  svg.ondblclick = () => setView(fullMinTime, fullMaxTime);
+  svg.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    const anchor = timeAtX(chartX(event));
+    zoom(Math.max(0.45, Math.min(2.2, Math.exp(event.deltaY * 0.0015))), anchor);
+  }, { passive: false });
+  $("[data-chart-zoom-in]", container).addEventListener("click", () => zoom(0.5));
+  $("[data-chart-zoom-out]", container).addEventListener("click", () => zoom(2));
+  $("[data-chart-reset]", container).addEventListener("click", () => setView(fullMinTime, fullMaxTime));
+  draw();
   return true;
 }
 
@@ -1305,6 +1419,8 @@ $("#node-sort").addEventListener("change", renderNodes);
 $("#event-search").addEventListener("input", renderEvents);
 $("#event-filter").addEventListener("change", renderEvents);
 $("#metrics-kind").addEventListener("change", renderMetricsHistory);
+$("#metrics-node-search").addEventListener("input", filterMetricNodeOptions);
+$(".metrics-node-picker").addEventListener("toggle", () => { if ($(".metrics-node-picker").open) requestAnimationFrame(() => $("#metrics-node-search").focus()); });
 $("#metrics-days").addEventListener("change", () => {
   if ($("#metrics-days").value === "custom") {
     $("#metrics-calendar").open = true;
