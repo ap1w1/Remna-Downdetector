@@ -912,7 +912,7 @@ function nearestChartPoint(points, target) {
   return points[low];
 }
 
-function renderTimeChart(container, inputSeries, formatValue, bounds = {}) {
+function renderTimeChart(container, inputSeries, formatValue, bounds = {}, markers = []) {
   const series = inputSeries.map((item, index) => ({ ...item, className: item.className || chartSeriesClass(index), points: item.points.filter(([timestamp, value]) => Number.isFinite(timestamp) && Number.isFinite(value)).sort((left, right) => left[0] - right[0]) })).filter((item) => item.points.length);
   const points = series.flatMap((item) => item.points);
   if (!points.length) return false;
@@ -963,7 +963,9 @@ function renderTimeChart(container, inputSeries, formatValue, bounds = {}) {
     const horizontalGrid = Array.from({ length: 5 }, (_, index) => { const value = max - index / 4 * span, y = yFor(value); return `<line class="chart-grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"/><text class="chart-axis-label" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${esc(formatValue(value))}</text>`; }).join("");
     const verticalGrid = Array.from({ length: 5 }, (_, index) => { const timestamp = viewMinTime + index / 4 * timeSpan, x = xFor(timestamp); return `<line class="chart-grid chart-grid-vertical" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}"/><text class="chart-axis-label" x="${x}" y="${height - 12}" text-anchor="${index === 0 ? "start" : index === 4 ? "end" : "middle"}">${esc(chartDateLabel(timestamp, timeSpan))}</text>`; }).join("");
     const paths = series.map((item) => { const shown = visiblePoints(item.points); return `<path class="chart-line ${item.className}" d="${shown.map(([timestamp, value], index) => `${index ? "L" : "M"}${xFor(timestamp).toFixed(2)},${yFor(value).toFixed(2)}`).join(" ")}"/>${shown.length === 1 ? `<circle class="${item.className}" cx="${xFor(shown[0][0])}" cy="${yFor(shown[0][1])}" r="4"/>` : ""}`; }).join("");
-    svg.innerHTML = `<defs><clipPath id="${clipId}"><rect x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}"/></clipPath></defs>${horizontalGrid}${verticalGrid}<g clip-path="url(#${clipId})">${paths}<line class="chart-cursor" x1="0" y1="${margin.top}" x2="0" y2="${height - margin.bottom}" visibility="hidden"/></g><rect class="chart-selection" x="0" y="${margin.top}" width="0" height="${plotHeight}" visibility="hidden"/>`;
+    const visibleMarkers = markers.filter((marker) => marker.timestamp >= viewMinTime && marker.timestamp <= viewMaxTime);
+    const eventMarkers = visibleMarkers.map((marker, index) => { const x = xFor(marker.timestamp), y = margin.top + 15 + index % 3 * 22; return `<g class="chart-event-marker" transform="translate(${x.toFixed(2)} ${y})"><title>${esc(marker.label)}</title><circle r="9"/><text x="0" y="4" text-anchor="middle">!</text></g>`; }).join("");
+    svg.innerHTML = `<defs><clipPath id="${clipId}"><rect x="${margin.left}" y="${margin.top}" width="${plotWidth}" height="${plotHeight}"/></clipPath></defs>${horizontalGrid}${verticalGrid}<g clip-path="url(#${clipId})">${paths}${eventMarkers}<line class="chart-cursor" x1="0" y1="${margin.top}" x2="0" y2="${height - margin.bottom}" visibility="hidden"/></g><rect class="chart-selection" x="0" y="${margin.top}" width="0" height="${plotHeight}" visibility="hidden"/>`;
     windowLabel.textContent = `${chartDateLabel(viewMinTime, Math.max(timeSpan, 3 * 86400000))} — ${chartDateLabel(viewMaxTime, Math.max(timeSpan, 3 * 86400000))}`;
     const isFull = Math.abs(viewMinTime - fullMinTime) < 1 && Math.abs(viewMaxTime - fullMaxTime) < 1;
     $("[data-chart-zoom-in]", container).disabled = timeSpan <= minimumTimeSpan * 1.01;
@@ -1235,7 +1237,7 @@ async function loadMetricsHistory() {
   metricsLoadTimer = null;
   const sequence = ++metricsLoadSequence;
   const period = $("#metrics-days").value;
-  const query = new URLSearchParams({ days: period === "custom" ? "1" : period, nodes: [...metricsSelected].join(",") });
+  const query = new URLSearchParams({ days: period === "custom" ? "1" : period, nodes: [...metricsSelected].join(","), include_events: $("#metrics-show-events").checked ? "true" : "false" });
   if (period === "custom" && metricsDateFrom && metricsDateTo) {
     query.set("date_from", metricsDateFrom);
     query.set("date_to", metricsDateTo);
@@ -1282,7 +1284,8 @@ function renderMetricsHistory() {
   const historical = $("#metrics-days").value === "custom", multiple = series.length > 1;
   const currentLabel = multiple ? `${averaged ? "Среднее" : "Всего"} ${historical ? "на конец" : "сейчас"}` : historical ? "На конец периода" : "Сейчас";
   $("#metrics-summary").innerHTML = `<article class="summary-card"><span>${currentLabel}</span><b>${metricHistoryFormat(current, kind)}</b></article><article class="summary-card"><span>${multiple ? "Максимум ноды" : "Максимум"}</span><b>${metricHistoryFormat(maximum, kind)}</b></article><article class="summary-card"><span>${multiple ? "Минимум ноды" : "Минимум"}</span><b>${metricHistoryFormat(minimum, kind)}</b></article>`;
-  renderTimeChart($("#metrics-chart"), series, (value) => metricHistoryFormat(value, kind), ["cpu_percent", "ram_percent"].includes(kind) ? { min: 0, max: 100 } : { min: 0 });
+  const markers = $("#metrics-show-events").checked ? (metricsData.events || []).map((event) => ({ timestamp: new Date(event.created_at).getTime(), label: `${event.node_name}: ${EVENT_META[event.event]?.label || event.event}` })).filter((event) => Number.isFinite(event.timestamp)) : [];
+  renderTimeChart($("#metrics-chart"), series, (value) => metricHistoryFormat(value, kind), ["cpu_percent", "ram_percent"].includes(kind) ? { min: 0, max: 100 } : { min: 0 }, markers);
 }
 
 async function loadLogs() {
@@ -1419,6 +1422,7 @@ $("#node-sort").addEventListener("change", renderNodes);
 $("#event-search").addEventListener("input", renderEvents);
 $("#event-filter").addEventListener("change", renderEvents);
 $("#metrics-kind").addEventListener("change", renderMetricsHistory);
+$("#metrics-show-events").addEventListener("change", loadMetricsHistory);
 $("#metrics-node-search").addEventListener("input", filterMetricNodeOptions);
 $(".metrics-node-picker").addEventListener("toggle", () => { if ($(".metrics-node-picker").open) requestAnimationFrame(() => $("#metrics-node-search").focus()); });
 $("#metrics-days").addEventListener("change", () => {
@@ -1670,7 +1674,7 @@ $("#node-regions").addEventListener("change", filterNodeRegions);
 $("#dpi-node-options").addEventListener("change", () => { updateDpiNodeCount(); const first = checked("#dpi-node-options")[0]; selected = state.nodes.find((node) => node.uuid === first) || null; if (selected) loadDpi(); });
 $("#dpi-schedule-mode").addEventListener("change", syncScheduleMode);
 $("#dpi-schedule-enabled").addEventListener("change", syncScheduleEnabled);
-$$('#node-action-chain input[type="checkbox"]').forEach((input) => input.addEventListener("change", syncAutomationOptions));
+$$('#node-action-chain .workflow-step > input[type="checkbox"]').forEach((input) => input.addEventListener("change", syncAutomationOptions));
 
 $("#app-settings").addEventListener("submit", async (event) => {
   event.preventDefault();

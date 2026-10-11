@@ -1431,7 +1431,7 @@ async def online_meta(_: str = Depends(require_user)):
 
 
 @app.get("/api/metrics/history")
-async def metrics_history(days: int = 1, nodes: str = "", date_from: str = "", date_to: str = "", _: str = Depends(require_user)):
+async def metrics_history(days: int = 1, nodes: str = "", date_from: str = "", date_to: str = "", include_events: bool = False, _: str = Depends(require_user)):
     days = max(1, min(days, 365))
     requested = {item for item in nodes.split(",") if item}
     with closing(connect_db()) as db:
@@ -1468,7 +1468,15 @@ async def metrics_history(days: int = 1, nodes: str = "", date_from: str = "", d
                     reduced.append(samples[-1])
                 samples = reduced
             series.append({"node": node, "samples": samples})
-    return {"days": days, "date_from": cutoff, "date_to": upper_bound, "series": series}
+        events = []
+        if include_events and selected:
+            selected_ids = [node["uuid"] for node in selected]
+            placeholders = ",".join("?" for _ in selected_ids)
+            events = [dict(row) for row in db.execute(
+                f"SELECT e.id,e.node_uuid,e.event,e.created_at,n.name AS node_name FROM events e JOIN nodes n ON n.uuid=e.node_uuid WHERE e.node_uuid IN ({placeholders}) AND e.created_at>=? AND e.created_at<? ORDER BY e.created_at LIMIT 2000",
+                [*selected_ids, cutoff, upper_bound],
+            )]
+    return {"days": days, "date_from": cutoff, "date_to": upper_bound, "series": series, "events": events}
 
 
 @app.get("/api/logs")
