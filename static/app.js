@@ -1243,6 +1243,10 @@ async function loadMetricsHistory() {
     query.set("date_to", metricsDateTo);
   }
   $("#metrics-chart").innerHTML = '<div class="empty">Загрузка истории…</div>';
+  if ($("#metrics-show-events").checked) {
+    $("#metrics-events").hidden = false;
+    $("#metrics-events-list").innerHTML = '<div class="empty">Загрузка событий…</div>';
+  }
   try {
     const response = await fetch(`/api/metrics/history?${query}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1269,12 +1273,26 @@ function metricHistoryFormat(value, kind) {
   return `${value.toFixed(1)}%`;
 }
 
+function renderMetricsEvents() {
+  const panel = $("#metrics-events");
+  const enabled = $("#metrics-show-events").checked;
+  panel.hidden = !enabled;
+  if (!enabled) return;
+  const events = metricsData.events || [];
+  $("#metrics-events-count").textContent = String(events.length);
+  $("#metrics-events-list").innerHTML = events.length ? events.map((event) => {
+    const meta = EVENT_META[event.event] || { label: event.event, className: "" };
+    return `<details class="metrics-event-row ${esc(meta.className)}"><summary><span class="metrics-event-alert">!</span>${flag(event.country_code)}<span><b>${esc(meta.label)}</b><small>${esc(event.node_name)} · ${esc(event.node_address || "IP не указан")}</small></span><time>${esc(formatTime(event.created_at))}</time><i></i></summary><div class="metrics-event-json"><pre>${highlightedText(event.payload || "{}")}</pre></div></details>`;
+  }).join("") : '<div class="empty">За выбранный период событий нет</div>';
+}
+
 function renderMetricsHistory() {
   const kind = $("#metrics-kind").value;
   const labels = { online: "Онлайн", cpu_percent: "CPU", ram_percent: "RAM", rx_bps: "RX", tx_bps: "TX" };
   const series = (metricsData.series || []).map((item, index) => ({ name: item.node.name, node: item.node, className: chartSeriesClass(index), points: (item.samples || []).map((sample) => [new Date(sample.created_at).getTime(), metricHistoryValue(sample, kind)]).filter(([, value]) => value !== null) })).filter((item) => item.points.length);
   const points = series.flatMap((item) => item.points);
   $("#metrics-chart-title").textContent = labels[kind] || kind;
+  renderMetricsEvents();
   $("#metrics-chart-caption").innerHTML = series.map((item) => `<span class="online-legend"><i class="${item.className}"></i>${esc(item.node.name)}</span>`).join("");
   $("#metrics-node-cards").innerHTML = series.map((item) => `<article class="online-node-card">${flag(item.node.country_code)}<span><b>${esc(item.node.name)}</b><small>${esc(item.node.address)}</small></span><strong>${metricHistoryFormat(item.points.at(-1)[1], kind)}</strong></article>`).join("");
   if (!points.length) { $("#metrics-chart").innerHTML = '<div class="empty">Нет данных за выбранный период</div>'; $("#metrics-summary").innerHTML = ""; return; }

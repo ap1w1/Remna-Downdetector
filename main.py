@@ -1473,7 +1473,7 @@ async def metrics_history(days: int = 1, nodes: str = "", date_from: str = "", d
             selected_ids = [node["uuid"] for node in selected]
             placeholders = ",".join("?" for _ in selected_ids)
             events = [dict(row) for row in db.execute(
-                f"SELECT e.id,e.node_uuid,e.event,e.created_at,n.name AS node_name FROM events e JOIN nodes n ON n.uuid=e.node_uuid WHERE e.node_uuid IN ({placeholders}) AND e.created_at>=? AND e.created_at<? ORDER BY e.created_at LIMIT 2000",
+                f"SELECT e.id,e.node_uuid,e.event,e.payload,e.created_at,n.name AS node_name,n.country_code,n.address AS node_address FROM events e JOIN nodes n ON n.uuid=e.node_uuid WHERE e.node_uuid IN ({placeholders}) AND e.created_at>=? AND e.created_at<? ORDER BY e.created_at DESC LIMIT 2000",
                 [*selected_ids, cutoff, upper_bound],
             )]
     return {"days": days, "date_from": cutoff, "date_to": upper_bound, "series": series, "events": events}
