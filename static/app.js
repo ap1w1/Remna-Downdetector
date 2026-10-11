@@ -35,6 +35,7 @@ let refreshTimer = null;
 let dpiOverview = { profile: {}, checks: [], pops: [], stats: [] };
 let onlineHours = 24;
 let onlineSelected = new Set();
+let eventNodeSelection = new Set();
 const ONLINE_COLORS = ["#2dd4bf", "#818cf8", "#fb7185", "#fbbf24", "#38bdf8", "#c084fc", "#4ade80", "#fb923c"];
 const dpiAvailable = () => dpiEnabled || Boolean(state.settings.dpi_api_configured);
 let domainData = [];
@@ -403,6 +404,7 @@ function renderEvents() {
   const events = state.events.filter((event) => (
     (!query || String(event.name || "").toLowerCase().includes(query))
     && (kind === "all" || event.event === kind)
+    && (!eventNodeSelection.size || eventNodeSelection.has(event.node_uuid))
   ));
   if ($("#events").classList.contains("active")) markEventsRead();
   else updateEventsBadge();
@@ -446,6 +448,16 @@ function render() {
   renderNodes();
   renderEvents();
   renderHooks();
+  const existingEventNodes = new Set(state.nodes.map((node) => node.uuid));
+  eventNodeSelection = new Set(
+    [...eventNodeSelection].filter((uuid) => existingEventNodes.has(uuid)),
+  );
+  $("#event-node-options").innerHTML = state.nodes.map((node) => `
+    <label><input type="checkbox" value="${esc(node.uuid)}" ${eventNodeSelection.has(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></label>
+  `).join("");
+  $("#event-node-count").textContent = eventNodeSelection.size
+    ? `Выбрано: ${eventNodeSelection.size}`
+    : "Все ноды";
   const current = checked("#dpi-node-options");
   $("#dpi-node-options").innerHTML = state.nodes.map((node) => `<label><input type="checkbox" value="${esc(node.uuid)}" ${current.includes(node.uuid) ? "checked" : ""}><span>${flag(node.country_code)}<b>${esc(node.name)}</b><small>${esc(node.address || "IP не указан")}</small></span></label>`).join("");
   updateDpiNodeCount();
@@ -745,10 +757,14 @@ function scheduleRefresh() {
 async function load({ force = false } = {}) {
   if (loading) return;
   loading = true;
+  const refreshStartedAt = force ? performance.now() : 0;
   const nodeDialogScroll = $("#node-dialog")?.open ? $(".dialog-scroll", $("#node-dialog")) : null;
   const nodeDialogScrollTop = nodeDialogScroll?.scrollTop ?? null;
   const refreshButton = $("#refresh");
-  if (force && refreshButton) refreshButton.disabled = true;
+  if (force && refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.classList.add("is-refreshing");
+  }
   try {
     const response = await fetch("/api/dashboard", {
       cache: "no-store",
@@ -793,8 +809,15 @@ async function load({ force = false } = {}) {
     }
     if (force) toast(`Ошибка обновления: ${error.message}`, true);
   } finally {
+    if (force) {
+      const remaining = 450 - (performance.now() - refreshStartedAt);
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+    }
     loading = false;
-    if (refreshButton) refreshButton.disabled = false;
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.classList.remove("is-refreshing");
+    }
     scheduleRefresh();
   }
 }
@@ -1019,17 +1042,21 @@ async function loadDpiOverview() {
 }
 
 async function loadDpi() {
-  if (!selected || !dpiAvailable()) return;
-  const node = selected;
+  if (!dpiAvailable()) return;
   const sequence = ++dpiLoadSequence;
   clearTimeout(dpiTimer);
   dpiTimer = null;
   try {
-    const response = await fetch(`/api/nodes/${encodeURIComponent(node.uuid)}/dpi`, { cache: "no-store" });
+    const response = await fetch("/api/dpi/history", { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const jobs = await response.json();
-    if (sequence !== dpiLoadSequence || selected?.uuid !== node.uuid) return;
+    if (sequence !== dpiLoadSequence) return;
     $("#dpi-result").innerHTML = jobs.length ? jobs.map((job) => {
+      const node = state.nodes.find((item) => item.uuid === job.node_uuid) || {
+        name: job.node_name,
+        country_code: job.node_country_code,
+        address: job.node_address,
+      };
       const result = job.result || {};
       const progress = result.progress || {};
       const status = dpiStatus(job);
@@ -1056,10 +1083,10 @@ async function loadDpi() {
       const checkLabel = popNames.length ? popNames.join(", ") : (REGIONS[job.location]?.name || job.location);
       return `
         <div class="dpi-job">
-          <div class="dpi-job-head">${flag(selected?.country_code)}<span class="dpi-job-node"><b>${esc(selected?.name || "Нода")}</b><small>${esc(job.target || selected?.address || "—")} · ${esc(checkLabel)}</small></span><span class="dpi-result-state ${resultClass}" title="${esc(resultLabel)}"><i></i>${resultSummary}</span><span class="dpi-job-status">${esc(statusLabel)}</span></div>
+          <div class="dpi-job-head">${flag(node.country_code)}<span class="dpi-job-node"><b>${esc(node.name || "Нода")}</b><small>${esc(job.target || node.address || "—")} · ${esc(checkLabel)}</small></span><span class="dpi-result-state ${resultClass}" title="${esc(resultLabel)}"><i></i>${resultSummary}</span><span class="dpi-job-status">${esc(statusLabel)}</span></div>
           <div class="progress-track ${["active", "pending"].includes(status) ? "is-running" : ""}"><i style="width:${Math.max(3, Math.min(100, percentDone))}%"></i></div>
           <div class="dpi-job-foot"><span>${esc(note)}</span><time>${formatTime(job.updated_at || job.created_at)}</time></div>
-          <details class="dpi-json"><summary>Открыть полную информацию</summary><div class="dpi-detail-grid"><span><small>Нода</small><b>${esc(selected?.name || "—")}</b></span><span><small>IP</small><b>${esc(job.target || "—")}</b></span><span><small>Регион</small><b>${esc(checkLabel)}</b></span><span><small>Стоимость</small><b>${money(result.usd_cost || result.estimated_cost || 0)}</b></span></div><pre>${jsonHighlight(result)}</pre></details>
+          <details class="dpi-json"><summary>Открыть полную информацию</summary><div class="dpi-detail-grid"><span><small>Нода</small><b>${esc(node.name || "—")}</b></span><span><small>IP</small><b>${esc(job.target || "—")}</b></span><span><small>Регион</small><b>${esc(checkLabel)}</b></span><span><small>Стоимость</small><b>${money(result.usd_cost || result.estimated_cost || 0)}</b></span></div><pre>${jsonHighlight(result)}</pre></details>
         </div>
       `;
     }).join("") : '<div class="empty">Проверок пока нет</div>';
@@ -1068,7 +1095,7 @@ async function loadDpi() {
       dpiTimer = setTimeout(loadDpi, 5000);
     }
   } catch (error) {
-    if (sequence !== dpiLoadSequence || selected?.uuid !== node.uuid) return;
+    if (sequence !== dpiLoadSequence) return;
     $("#dpi-result").innerHTML = `<div class="empty">Не удалось загрузить проверки: ${esc(error.message)}</div>`;
   }
 }
@@ -1205,6 +1232,13 @@ $("#country-filter").addEventListener("change", renderNodes);
 $("#node-sort").addEventListener("change", renderNodes);
 $("#event-search").addEventListener("input", renderEvents);
 $("#event-filter").addEventListener("change", renderEvents);
+$("#event-node-options").addEventListener("change", () => {
+  eventNodeSelection = new Set(checked("#event-node-options"));
+  $("#event-node-count").textContent = eventNodeSelection.size
+    ? `Выбрано: ${eventNodeSelection.size}`
+    : "Все ноды";
+  renderEvents();
+});
 $("#clear-events").addEventListener("click", async (event) => {
   if (!state.events.length) {
     toast("Событий для очистки нет");
@@ -1516,9 +1550,10 @@ $("#hooks-list").addEventListener("click", async (event) => {
   const webhookId = Number(button.dataset.deleteHook);
   button.disabled = true;
   try {
-    const response = await fetch(`/api/webhooks/${webhookId}`, {
-      method: "DELETE",
-      headers: { "X-CSRF-Token": csrf },
+    const response = await fetch(`/api/webhooks/${webhookId}/delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrf_token: csrf }),
     });
     if (!response.ok) throw new Error(await jsonError(response));
     state.webhooks = state.webhooks.filter((hook) => Number(hook.id) !== webhookId);

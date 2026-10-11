@@ -9,7 +9,7 @@
   <title>RemnaDownDetector</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
   <link rel="stylesheet" href="/static/app.css?v=20261009-2">
-  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-26">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-27">
 </head>
 <body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
   <div class="app-shell">
@@ -133,7 +133,8 @@
           </div>
           <div class="event-filters panel-surface">
             <label><span>Поиск по ноде</span><input id="event-search" placeholder="Название ноды" autocomplete="off"></label>
-              <label><span>Тип события</span><select id="event-filter"><option value="all">Все события</option><option value="node.unavailable">Нода недоступна</option><option value="node.available">Нода доступна</option><option value="node.online_drop">Падение онлайна</option><option value="node.online_recovered">Онлайн восстановлен</option><option value="node.ip_changed">IP ноды изменён</option><option value="domain.ip_changed">IP домена изменён</option><option value="node.cpu_threshold">Превышение CPU</option><option value="node.ram_threshold">Превышение RAM</option><option value="node.rx_threshold">Превышение RX</option><option value="node.tx_threshold">Превышение TX</option><option value="dpi.check_started">DPI запущен</option><option value="dpi.check_completed">DPI завершён</option></select></label>
+            <label><span>Тип события</span><select id="event-filter"><option value="all">Все события</option><option value="node.unavailable">Нода недоступна</option><option value="node.available">Нода доступна</option><option value="node.online_drop">Падение онлайна</option><option value="node.online_recovered">Онлайн восстановлен</option><option value="node.ip_changed">IP ноды изменён</option><option value="domain.ip_changed">IP домена изменён</option><option value="node.cpu_threshold">Превышение CPU</option><option value="node.ram_threshold">Превышение RAM</option><option value="node.rx_threshold">Превышение RX</option><option value="node.tx_threshold">Превышение TX</option><option value="dpi.check_started">DPI запущен</option><option value="dpi.check_completed">DPI завершён</option></select></label>
+            <details class="event-node-filter"><summary><span>Ноды</span><b id="event-node-count">Все ноды</b></summary><div id="event-node-options" class="event-node-options"></div></details>
           </div>
           <div id="events-list" class="events-list"><div class="empty">Загрузка событий…</div></div>
         </section>
@@ -215,6 +216,7 @@
               </div>
               <details class="event-select-dropdown"><summary><span>Уведомления Telegram</span><b id="telegram-event-count">Все события</b></summary><div id="telegram-event-types" class="event-option-list"></div></details>
               <p class="form-hint">Без ID топика сообщение отправляется в общий чат.</p>
+              <a class="secondary-button remnadown-update-button" href="https://github.com/ap1w1/Remna-Downdetector#обновление" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg><span><b>Обновить RemnaDown</b><small>Открыть инструкцию обновления</small></span></a>
             </article>
 
           </form>
@@ -254,7 +256,7 @@
               </div>
             </article>
           </div>
-          <div class="dpi-history-grid"><article class="settings-card"><div class="card-heading"><div><h2>История проверок</h2><p>Полный ответ и техническая информация доступны внутри записи</p></div></div><div id="dpi-result" class="dpi-result"><div class="empty">Выберите ноду</div></div></article><article class="settings-card dpi-expenses-card"><div class="card-heading"><div><h2>Расходы</h2><p>Списания DPI Checker</p></div></div><div id="dpi-expenses" class="dpi-expenses"></div></article></div>
+          <div class="dpi-history-grid"><article class="settings-card"><div class="card-heading"><div><h2>История проверок</h2><p>Проверки всех нод, полный ответ доступен внутри записи</p></div></div><div id="dpi-result" class="dpi-result"><div class="empty">Загрузка истории…</div></div></article><article class="settings-card dpi-expenses-card"><div class="card-heading"><div><h2>Расходы</h2><p>Списания DPI Checker</p></div></div><div id="dpi-expenses" class="dpi-expenses"></div></article></div>
         </section>
         <section id="domains" class="view"><div class="page-heading"><div class="toolbar-heading"><span class="theme-icon cyan">DNS</span><div><h1 id="domains-title">Домены</h1><p>Связи Remnawave Hosts с нодами</p></div></div><div class="domain-toolbar"><label><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg><input id="domain-search" type="search" placeholder="Домен, IP или название ноды"></label><button id="refresh-domains" class="icon-button" type="button" title="Обновить"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg></button></div></div><div id="domains-list" class="domains-list"><div class="empty">Загрузка доменов…</div></div></section>
         <section id="help" class="view">
@@ -390,6 +392,6 @@
   <dialog id="activate-ip-dialog" class="compact-dialog confirm-ip-dialog"><form method="dialog" id="activate-ip-form"><div class="dialog-header"><div class="dialog-title"><span class="theme-icon violet">IP</span><div><h2>Установить IP-адрес</h2><p id="activate-ip-address">—</p></div></div><button class="dialog-close" type="button" data-close-ip-dialog aria-label="Закрыть">×</button></div><div class="confirm-question"><b>1. Изменить основной IP ноды?</b><div><label><input type="radio" name="confirm_ip" value="yes"> Да</label><label><input type="radio" name="confirm_ip" value="no"> Нет</label></div></div><div class="confirm-question"><b>2. Обновить IP у всех привязанных доменов?</b><div><label><input type="radio" name="confirm_dns" value="yes"> Да</label><label><input type="radio" name="confirm_dns" value="no"> Нет</label></div></div><p class="form-hint">Предыдущий основной IP будет добавлен последним в список резервных.</p><div class="dialog-actions"><button class="secondary-button" type="button" data-close-ip-dialog>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
   <dialog id="support-dialog" class="support-dialog"><button class="dialog-close" type="button" aria-label="Закрыть">×</button><div class="support-hero"><span>♥</span><div><h2>Поддержать проект</h2><p>Спасибо за поддержку развития RemnaDownDetector</p></div></div><div class="wallet-list"><button type="button" data-wallet="TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa"><b>USDT TRC20</b><code>TNFKQe2hpC12U2M9z9JX1WRjhZjS9c4Nqa</code><span>Копировать</span></button><button type="button" data-wallet="UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN"><b>USDT TON</b><code>UQA4wspCqRxx7fJAXPfX64e0zhzzD7IZVBIs2LzaMe6etcGN</code><span>Копировать</span></button><button type="button" data-wallet="0x1B7905b1F335cdA649100f660d824018e6dE60A2"><b>USDT BEP20</b><code>0x1B7905b1F335cdA649100f660d824018e6dE60A2</code><span>Копировать</span></button><button type="button" data-wallet="bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy"><b>BTC</b><code>bc1q72wry34y4duwkprpsdevjedrjgdngwnrhmlgfy</code><span>Копировать</span></button></div><div class="support-services"><a href="https://t.me/send?start=IV112jEOQ7s1" target="_blank" rel="noopener noreferrer"><span>↗</span><b>CryptoBot</b></a><a href="https://t.me/xrocket?start=inv_XGcVb2B8xfpV6Wi" target="_blank" rel="noopener noreferrer"><span>↗</span><b>XRocket</b></a></div></dialog>
   <dialog id="dpi-token-dialog" class="compact-dialog dpi-token-dialog"><form method="dialog" id="dpi-token-form"><div class="dialog-header"><div class="dialog-title"><img class="provider-logo" src="/api/integration-icon/dpi" alt=""><div><h2>API-токен DPI Checker</h2><p>Новый токен будет сохранён после подтверждения</p></div></div><button class="dialog-close" type="button" data-close-dpi-token aria-label="Закрыть">×</button></div><div class="dpi-token-dialog-body"><label>API-токен<input form="app-settings" name="dpi_api_key" type="password" placeholder="Введите новый токен" autocomplete="new-password"></label></div><div class="dialog-actions"><button class="secondary-button dialog-secondary-button" type="button" data-close-dpi-token>Отмена</button><button class="primary-button" type="submit">Применить</button></div></form></dialog>
-  <script src="/static/app.js?v=20261011-27"></script>
+  <script src="/static/app.js?v=20261011-28"></script>
 </body>
 </html>

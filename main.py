@@ -1658,6 +1658,28 @@ async def delete_webhook(webhook_id: int, request: Request, _: str = Depends(req
     return {"ok": True}
 
 
+@app.post("/api/webhooks/{webhook_id}/delete")
+async def delete_webhook_post(
+    webhook_id: int,
+    request: Request,
+    _: str = Depends(require_user),
+):
+    payload = await request.json()
+    verify_csrf(request, str(payload.get("csrf_token", "")))
+    with closing(connect_db()) as db:
+        webhook = db.execute(
+            "SELECT id FROM webhooks WHERE id=?",
+            (webhook_id,),
+        ).fetchone()
+        if webhook is None:
+            raise HTTPException(404, "Webhook not found")
+        db.execute("DELETE FROM node_webhooks WHERE webhook_id=?", (webhook_id,))
+        db.execute("DELETE FROM webhook_events WHERE webhook_id=?", (webhook_id,))
+        db.execute("DELETE FROM webhooks WHERE id=?", (webhook_id,))
+        db.commit()
+    return {"ok": True}
+
+
 @app.post("/api/nodes/{node_uuid}/dpi")
 async def dpi_check(
     node_uuid: str,
@@ -1781,6 +1803,44 @@ async def dpi_history(node_uuid: str, _: str = Depends(require_user)):
                 "Invalid stored DPI result row_id=%s node_uuid=%s: %s",
                 row["id"],
                 node_uuid,
+                exc,
+            )
+            result = {
+                "status": "failed",
+                "error": "Stored DPI result is invalid",
+                "results": [],
+            }
+            item["status"] = "failed"
+        item["target"] = (
+            "[VLESS hidden]" if row["kind"] == "vless" else row["target"]
+        )
+        item["result"] = result
+        history.append(item)
+    return history
+
+
+@app.get("/api/dpi/history")
+async def dpi_history_all(_: str = Depends(require_user)):
+    with closing(connect_db()) as db:
+        rows = db.execute(
+            "SELECT d.id,d.node_uuid,d.target,d.location,d.provider_id,"
+            "d.status,d.result,d.created_at,d.updated_at,d.kind,d.source,"
+            "n.name node_name,n.country_code node_country_code,"
+            "n.address node_address FROM dpi_checks d JOIN nodes n "
+            "ON n.uuid=d.node_uuid ORDER BY d.id DESC LIMIT 300"
+        ).fetchall()
+    history = []
+    for row in rows:
+        item = dict(row)
+        try:
+            result = json.loads(row["result"] or "{}")
+            if not isinstance(result, dict):
+                raise ValueError("DPI result must be an object")
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            logger.error(
+                "Invalid stored DPI result row_id=%s node_uuid=%s: %s",
+                row["id"],
+                row["node_uuid"],
                 exc,
             )
             result = {
