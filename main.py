@@ -72,6 +72,10 @@ icon_cache = IconCache(
     logger,
 )
 permission_alerts: deque[dict[str, str]] = deque(maxlen=20)
+managed_domains_cache: dict[str, Any] | None = None
+managed_domains_cache_at = 0.0
+managed_domains_cache_lock = asyncio.Lock()
+MANAGED_DOMAINS_CACHE_SECONDS = 300
 
 
 def utc_now() -> str:
@@ -912,7 +916,7 @@ async def regru_request(namespace: str, method: str, params: dict[str, Any]) -> 
     return payload.get("answer") or {}
 
 
-async def managed_domains(app: FastAPI) -> dict[str, Any]:
+async def load_managed_domains(app: FastAPI) -> dict[str, Any]:
     hosts = await app.state.remna.hosts()
     host_names = sorted({str(item.get("address", "")).lower().rstrip(".") for item in hosts if item.get("address") and not re.fullmatch(r"[0-9a-fA-F:.]+", str(item["address"]))})
     result: dict[str, Any] = {"hosts": hosts, "domains": []}
@@ -949,6 +953,37 @@ async def managed_domains(app: FastAPI) -> dict[str, Any]:
     return result
 
 
+def invalidate_managed_domains_cache() -> None:
+    global managed_domains_cache, managed_domains_cache_at
+    managed_domains_cache = None
+    managed_domains_cache_at = 0.0
+
+
+async def managed_domains(
+    app: FastAPI,
+    force_refresh: bool = False,
+) -> dict[str, Any]:
+    global managed_domains_cache, managed_domains_cache_at
+    now = time.monotonic()
+    if (
+        not force_refresh
+        and managed_domains_cache is not None
+        and now - managed_domains_cache_at < MANAGED_DOMAINS_CACHE_SECONDS
+    ):
+        return managed_domains_cache
+    async with managed_domains_cache_lock:
+        now = time.monotonic()
+        if (
+            not force_refresh
+            and managed_domains_cache is not None
+            and now - managed_domains_cache_at < MANAGED_DOMAINS_CACHE_SECONDS
+        ):
+            return managed_domains_cache
+        managed_domains_cache = await load_managed_domains(app)
+        managed_domains_cache_at = time.monotonic()
+        return managed_domains_cache
+
+
 def dpi_result_unavailable(result: dict[str, Any]) -> bool:
     samples = [
         item
@@ -980,7 +1015,7 @@ async def replace_managed_dns(app: FastAPI, node_uuid: str, old_ip: str, new_ip:
     changes: list[dict[str, Any]] = []
     hosts = [item for item in await app.state.remna.hosts() if node_uuid in (item.get("nodes") or [])]
     names = {str(item.get("address", "")).lower().rstrip(".") for item in hosts}
-    domains = await managed_domains(app)
+    domains = await managed_domains(app, force_refresh=True)
     if cf_token:
         async with httpx.AsyncClient(base_url="https://api.cloudflare.com/client/v4", headers={"Authorization": f"Bearer {cf_token}"}, timeout=30) as client:
             for zone in (item for item in domains["domains"] if item["provider"] == "Cloudflare"):
@@ -1009,6 +1044,8 @@ async def replace_managed_dns(app: FastAPI, node_uuid: str, old_ip: str, new_ip:
         if node:
             await send_webhooks("domain.ip_changed", dict(node), change)
             await telegram_notify("events", f"<b>DNS-запись изменена</b>\nДомен: <code>{html.escape(str(change['domain']))}</code>\n{html.escape(old_ip)} → {html.escape(new_ip)}", "domain.ip_changed")
+    if changes:
+        invalidate_managed_domains_cache()
     return changes
 
 
@@ -1568,12 +1605,17 @@ async def update_app_settings(body: AppSettingsUpdate, request: Request, _: str 
             values["telegram_bot_token"] = body.telegram_bot_token
         db.executemany("INSERT INTO app_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", values.items())
         db.commit()
+    invalidate_managed_domains_cache()
     return {"ok": True}
 
 
 @app.get("/api/domains")
-async def domains_data(request: Request, _: str = Depends(require_user)):
-    return await managed_domains(request.app)
+async def domains_data(
+    request: Request,
+    refresh: bool = False,
+    _: str = Depends(require_user),
+):
+    return await managed_domains(request.app, force_refresh=refresh)
 
 
 @app.post("/api/webhooks")
@@ -1603,6 +1645,14 @@ async def update_webhook_events(webhook_id: int, body: WebhookEventsUpdate, requ
 async def delete_webhook(webhook_id: int, request: Request, _: str = Depends(require_user)):
     verify_csrf(request, request.headers.get("X-CSRF-Token", ""))
     with closing(connect_db()) as db:
+        webhook = db.execute(
+            "SELECT id FROM webhooks WHERE id=?",
+            (webhook_id,),
+        ).fetchone()
+        if webhook is None:
+            raise HTTPException(404, "Webhook not found")
+        db.execute("DELETE FROM node_webhooks WHERE webhook_id=?", (webhook_id,))
+        db.execute("DELETE FROM webhook_events WHERE webhook_id=?", (webhook_id,))
         db.execute("DELETE FROM webhooks WHERE id=?", (webhook_id,))
         db.commit()
     return {"ok": True}

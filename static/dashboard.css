@@ -2716,7 +2716,7 @@ legend small {
 
 .dpi-integration-card,
 .dpi-manual-card,
-.dpi-schedule-card { min-width: 0; min-height: 330px; align-self: start; }
+.dpi-schedule-card { min-width: 0; min-height: 330px; align-self: start; align-content: start; }
 
 .dpi-integration-options {
   display: grid;

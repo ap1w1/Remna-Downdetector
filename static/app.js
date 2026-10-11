@@ -38,6 +38,8 @@ let onlineSelected = new Set();
 const ONLINE_COLORS = ["#2dd4bf", "#818cf8", "#fb7185", "#fbbf24", "#38bdf8", "#c084fc", "#4ade80", "#fb923c"];
 const dpiAvailable = () => dpiEnabled || Boolean(state.settings.dpi_api_configured);
 let domainData = [];
+let domainsLoadedAt = 0;
+let dpiLoadSequence = 0;
 let pendingActivateId = null;
 let notificationAudioContext = null;
 let lastIntegrationAlert = sessionStorage.getItem("remnadown-integration-alert") || "";
@@ -1018,10 +1020,15 @@ async function loadDpiOverview() {
 
 async function loadDpi() {
   if (!selected || !dpiAvailable()) return;
+  const node = selected;
+  const sequence = ++dpiLoadSequence;
+  clearTimeout(dpiTimer);
+  dpiTimer = null;
   try {
-    const response = await fetch(`/api/nodes/${encodeURIComponent(selected.uuid)}/dpi`, { cache: "no-store" });
+    const response = await fetch(`/api/nodes/${encodeURIComponent(node.uuid)}/dpi`, { cache: "no-store" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const jobs = await response.json();
+    if (sequence !== dpiLoadSequence || selected?.uuid !== node.uuid) return;
     $("#dpi-result").innerHTML = jobs.length ? jobs.map((job) => {
       const result = job.result || {};
       const progress = result.progress || {};
@@ -1061,6 +1068,7 @@ async function loadDpi() {
       dpiTimer = setTimeout(loadDpi, 5000);
     }
   } catch (error) {
+    if (sequence !== dpiLoadSequence || selected?.uuid !== node.uuid) return;
     $("#dpi-result").innerHTML = `<div class="empty">Не удалось загрузить проверки: ${esc(error.message)}</div>`;
   }
 }
@@ -1223,7 +1231,7 @@ $("#clear-events").addEventListener("click", async (event) => {
 $("#log-level").addEventListener("change", loadLogs);
 $("#log-search").addEventListener("input", loadLogs);
 $("#refresh-logs").addEventListener("click", loadLogs);
-$("#refresh-domains").addEventListener("click", loadDomains);
+$("#refresh-domains").addEventListener("click", () => loadDomains(true));
 $("#domain-search").addEventListener("input", renderDomains);
 $("#refresh").addEventListener("click", () => load({ force: true }));
 
@@ -1523,6 +1531,34 @@ $("#hooks-list").addEventListener("click", async (event) => {
   } catch (error) {
     button.disabled = false;
     toast(`Не удалось удалить вебхук: ${error.message}`, true);
+  }
+});
+
+$("#hooks-list").addEventListener("change", async (event) => {
+  const toggle = event.target.closest("[data-hook-enabled]");
+  if (!toggle) return;
+  const row = toggle.closest("[data-hook-id]");
+  const hookId = Number(row.dataset.hookId);
+  const enabled = toggle.checked;
+  toggle.disabled = true;
+  try {
+    const events = $$("input[type='checkbox'][value]", row)
+      .filter((item) => item.checked)
+      .map((item) => item.value);
+    const response = await fetch(`/api/webhooks/${hookId}/events`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled, events, csrf_token: csrf }),
+    });
+    if (!response.ok) throw new Error(await jsonError(response));
+    const hook = state.webhooks.find((item) => Number(item.id) === hookId);
+    if (hook) hook.enabled = enabled;
+    toast(enabled ? "Вебхук включён" : "Вебхук отключён");
+  } catch (error) {
+    toggle.checked = !enabled;
+    toast(`Не удалось изменить вебхук: ${error.message}`, true);
+  } finally {
+    toggle.disabled = false;
   }
 });
 
