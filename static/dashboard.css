@@ -1507,6 +1507,14 @@ legend small {
   align-self: end;
 }
 
+.event-node-filter-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--rw-dark-1);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .event-node-filter > summary {
   display: flex;
   min-height: 36px;
@@ -1522,8 +1530,9 @@ legend small {
 }
 
 .event-node-filter > summary::-webkit-details-marker { display: none; }
-.event-node-filter > summary span { color: var(--rw-dark-1); font-size: 10px; font-weight: 600; }
-.event-node-filter > summary b { color: var(--rw-cyan); font-size: 10px; }
+.event-node-filter > summary b { overflow: hidden; color: var(--rw-white); font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.event-node-filter > summary svg { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: var(--rw-dark-2); stroke-width: 2; transition: transform .18s; }
+.event-node-filter[open] > summary svg { transform: rotate(180deg); }
 
 .event-node-options {
   position: absolute;

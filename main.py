@@ -1627,12 +1627,34 @@ async def update_remnadown(request: Request, _: str = Depends(require_user)):
     verify_csrf(request, str(payload.get("csrf_token", "")))
     if update_process is not None and update_process.returncode is None:
         raise HTTPException(409, "RemnaDown update is already running")
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                settings.remnadown_updater_url,
+                headers={"Authorization": f"Bearer {settings.app_secret}"},
+            )
+        if response.status_code == 202:
+            logger.warning("RemnaDown update started by panel administrator")
+            return {"ok": True, "message": "Update started"}
+        if response.status_code == 409:
+            raise HTTPException(409, "RemnaDown update is already running")
+        logger.error(
+            "Updater service returned HTTP %s: %s",
+            response.status_code,
+            response.text[:500],
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("Updater service is unavailable: %s", exc)
     command = shlex.split(settings.remnadown_update_command)
     if not command:
         raise HTTPException(503, "RemnaDown update command is not configured")
     executable = Path(command[0])
     if executable.is_absolute() and not executable.exists():
-        raise HTTPException(503, f"Update command not found: {executable}")
+        raise HTTPException(
+            503,
+            "Updater service is unavailable. Run once: docker compose up -d "
+            "--build updater app",
+        )
     try:
         update_process = await asyncio.create_subprocess_exec(
             *command,
