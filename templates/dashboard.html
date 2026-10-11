@@ -9,7 +9,7 @@
   <title>RemnaDownDetector</title>
   <link rel="icon" type="image/svg+xml" href="/static/logo.svg?v=20261011-1">
   <link rel="stylesheet" href="/static/app.css?v=20261009-2">
-  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-22">
+  <link rel="stylesheet" href="/static/dashboard.css?v=20261011-23">
 </head>
 <body data-csrf="{{ csrf }}" data-dpi-enabled="{{ 'true' if dpi_enabled else 'false' }}">
   <div class="app-shell">
@@ -229,7 +229,7 @@
               <button id="change-dpi-token" class="primary-button compact-action dpi-token-button" type="button">Изменить API-токен</button>
               <div class="dpi-integration-options">
                 <label class="switch-row"><span><b>Инфрабиллинг Remnawave</b><small>Записывать стоимость завершённых проверок</small></span><input form="app-settings" name="dpi_infra_billing_enabled" type="checkbox"><i></i></label>
-                <label>Баланс ниже, $<input form="app-settings" name="dpi_balance_threshold" type="number" min="0" max="100000" step="0.01"></label>
+                <label class="balance-threshold-field"><span>Порог предупреждения</span><small>Сообщить, когда баланс станет ниже</small><span class="input-with-suffix"><input form="app-settings" name="dpi_balance_threshold" type="number" min="0" max="100000" step="0.01"><b>USD</b></span></label>
               </div>
             </article>
             <article class="settings-card dpi-manual-card">

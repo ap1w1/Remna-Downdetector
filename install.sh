@@ -8,10 +8,42 @@ NONINTERACTIVE="${NONINTERACTIVE:-0}"
 PROXY_MODE="${PROXY_MODE:-auto}"
 APP_PORT="${APP_PORT:-8088}"
 
-green='\033[0;32m'; yellow='\033[1;33m'; red='\033[0;31m'; reset='\033[0m'
+green='\033[0;32m'; yellow='\033[1;33m'; red='\033[0;31m'; cyan='\033[0;36m'; blue='\033[1;34m'; bold='\033[1m'; dim='\033[2m'; reset='\033[0m'
 info(){ printf "%b[+]%b %s\n" "$green" "$reset" "$*"; }
 warn(){ printf "%b[!]%b %s\n" "$yellow" "$reset" "$*"; }
 die(){ printf "%b[ERROR]%b %s\n" "$red" "$reset" "$*" >&2; exit 1; }
+
+rule(){ printf "%b%*s%b\n" "$dim" "${COLUMNS:-78}" '' "$reset" | tr ' ' '-'; }
+banner(){
+  printf "%b" "$cyan"
+  cat <<'EOF'
+██████╗ ███████╗███╗   ███╗███╗   ██╗ █████╗ ██████╗  ██████╗ ██╗    ██╗███╗   ██╗
+██╔══██╗██╔════╝████╗ ████║████╗  ██║██╔══██╗██╔══██╗██╔═══██╗██║    ██║████╗  ██║
+██████╔╝█████╗  ██╔████╔██║██╔██╗ ██║███████║██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║
+██╔══██╗██╔══╝  ██║╚██╔╝██║██║╚██╗██║██╔══██║██║  ██║██║   ██║██║███╗██║██║╚██╗██║
+██║  ██║███████╗██║ ╚═╝ ██║██║ ╚████║██║  ██║██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║
+╚═╝  ╚═╝╚══════╝╚═╝     ╚═╝╚═╝  ╚═══╝╚═╝  ╚═╝╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝
+EOF
+  printf "%b%b       Remnawave node monitoring and DPI automation%b\n\n" "$reset" "$dim" "$reset"
+}
+section(){ printf "\n%b%s%b\n" "$bold$blue" "$1" "$reset"; rule; }
+step(){ printf "\n%b[%s/6]%b %b%s%b\n" "$cyan" "$1" "$reset" "$bold" "$2" "$reset"; }
+
+interactive_menu(){
+  [[ "$NONINTERACTIVE" == 1 ]] && return
+  section "Мастер установки"
+  printf "  %b1)%b Установить или обновить RemnaDownDetector\n" "$green" "$reset"
+  printf "  %b2)%b Показать требования\n" "$cyan" "$reset"
+  printf "  %b0)%b Выйти\n\n" "$red" "$reset"
+  local choice
+  read -r -p "Выберите действие [1]: " choice </dev/tty
+  case "${choice:-1}" in
+    1) ;;
+    2) printf "\nUbuntu/Debian, root-доступ, домен с A/AAAA-записью, Docker и токен Remnawave.\n"; exit 0;;
+    0) exit 0;;
+    *) die "Неизвестный пункт меню: $choice";;
+  esac
+}
 
 usage(){ cat <<EOF
 $APP_NAME installer
@@ -89,9 +121,12 @@ prepare_source(){
 }
 
 configure(){
-  prompt DOMAIN "Домен панели (без https://)" ""
-  prompt REMNAWAVE_URL "URL панели Remnawave" ""
-  prompt REMNAWAVE_API_TOKEN "API-токен Remnawave (nodes:read)" "" 1
+  section "Параметры RemnaDownDetector"
+  printf "%bУкажите отдельный домен, по которому будет открываться эта панель.%b\n" "$dim" "$reset"
+  prompt DOMAIN "Домен панели RemnaDown, без https:// (например, monitor.example.com)" ""
+  printf "\n%bПодключение к существующей панели Remnawave%b\n" "$bold" "$reset"
+  prompt REMNAWAVE_URL "URL панели Remnawave (например, https://panel.example.com)" ""
+  prompt REMNAWAVE_API_TOKEN "API-токен Remnawave" "" 1
   prompt DPI_API_KEY "API-ключ DPI Checker (Enter, чтобы пропустить)" "" 1
   prompt ADMIN_USERNAME "Логин администратора" "admin"
   if [[ -z "${ADMIN_PASSWORD:-}" ]]; then ADMIN_PASSWORD=$(openssl rand -hex 16); fi
@@ -109,12 +144,18 @@ configure(){
     warn "Порт $initial_port занят; выбран свободный порт $APP_PORT."
   fi
 
-  local app_secret
-  app_secret=$(openssl rand -hex 32)
+  APP_SECRET_VALUE=$(openssl rand -hex 32)
+}
+
+write_env(){
+  if [[ -f .env ]]; then
+    cp .env ".env.backup.$(date +%Y%m%d%H%M%S)"
+    warn "Существующий .env сохранён в резервную копию."
+  fi
   cat >.env <<EOF
 DOMAIN=$DOMAIN
 APP_PORT=$APP_PORT
-APP_SECRET=$app_secret
+APP_SECRET=$APP_SECRET_VALUE
 ADMIN_USERNAME=$ADMIN_USERNAME
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 REMNAWAVE_URL=$REMNAWAVE_URL
@@ -141,9 +182,29 @@ EOF
 
 choose_proxy(){
   if [[ "$PROXY_MODE" == auto ]]; then
-    if systemctl is-active --quiet caddy 2>/dev/null; then PROXY_MODE=system-caddy
-    elif ss -ltn 2>/dev/null | grep -qE ':(80|443)[[:space:]]'; then PROXY_MODE=local
-    else PROXY_MODE=bundled-caddy
+    local detected
+    if systemctl is-active --quiet caddy 2>/dev/null; then detected=system-caddy
+    elif ss -ltn 2>/dev/null | grep -qE ':(80|443)[[:space:]]'; then detected=local
+    else detected=bundled-caddy
+    fi
+    if [[ "$NONINTERACTIVE" == 1 ]]; then
+      PROXY_MODE=$detected
+    else
+      section "Публикация панели"
+      printf "Обнаружен рекомендуемый режим: %b%s%b\n\n" "$green" "$detected" "$reset"
+      printf "  1) Встроенный Caddy — автоматически получить HTTPS\n"
+      printf "  2) Системный Caddy — добавить сайт в /etc/caddy/Caddyfile\n"
+      printf "  3) Только локальный порт — настроить proxy самостоятельно\n\n"
+      local proxy_choice default_choice=1
+      [[ "$detected" == system-caddy ]] && default_choice=2
+      [[ "$detected" == local ]] && default_choice=3
+      read -r -p "Выберите режим [$default_choice]: " proxy_choice </dev/tty
+      case "${proxy_choice:-$default_choice}" in
+        1) PROXY_MODE=bundled-caddy;;
+        2) PROXY_MODE=system-caddy;;
+        3) PROXY_MODE=local;;
+        *) die "Неизвестный режим публикации.";;
+      esac
     fi
   fi
   case "$PROXY_MODE" in
@@ -151,6 +212,21 @@ choose_proxy(){
     *) die "Неизвестный PROXY_MODE=$PROXY_MODE";;
   esac
   info "Режим reverse proxy: $PROXY_MODE"
+}
+
+confirm_install(){
+  [[ "$NONINTERACTIVE" == 1 ]] && return
+  section "Проверка параметров"
+  printf "  Домен панели RemnaDown  : %b%s%b\n" "$bold" "$DOMAIN" "$reset"
+  printf "  Панель Remnawave        : %s\n" "$REMNAWAVE_URL"
+  printf "  Каталог установки       : %s\n" "$INSTALL_DIR"
+  printf "  Локальный порт          : %s\n" "$APP_PORT"
+  printf "  Reverse proxy           : %s\n" "$PROXY_MODE"
+  printf "  DPI Checker             : %s\n" "$([[ -n "$DPI_API_KEY" ]] && printf 'подключён' || printf 'пропущен')"
+  printf "\n"
+  local answer
+  read -r -p "Начать установку? [Y/n]: " answer </dev/tty
+  [[ "${answer:-y}" =~ ^[YyДд]$ ]] || { warn "Установка отменена."; exit 0; }
 }
 
 configure_system_caddy(){
@@ -192,12 +268,23 @@ deploy(){
   die "Приложение не прошло healthcheck."
 }
 
+banner
+interactive_menu
+step 1 "Проверка окружения и Docker"
 install_docker
+step 2 "Подготовка файлов проекта"
 prepare_source
+step 3 "Настройка панели и интеграций"
 configure
+step 4 "Выбор способа публикации"
 choose_proxy
+step 5 "Подтверждение установки"
+confirm_install
+write_env
+step 6 "Сборка и запуск контейнеров"
 deploy
 
-printf "\n%b%s установлен.%b\n" "$green" "$APP_NAME" "$reset"
-printf "URL: https://%s\nЛогин: %s\nПароль: %s\n" "$DOMAIN" "$ADMIN_USERNAME" "$ADMIN_PASSWORD"
-printf "Сохраните пароль. Повторно он не выводится.\n"
+section "Установка завершена"
+printf "%b%s успешно установлен.%b\n\n" "$green$bold" "$APP_NAME" "$reset"
+printf "  URL    : %bhttps://%s%b\n  Логин  : %s\n  Пароль : %b%s%b\n" "$cyan" "$DOMAIN" "$reset" "$ADMIN_USERNAME" "$yellow" "$ADMIN_PASSWORD" "$reset"
+printf "\n%bСохраните пароль: повторно он не выводится.%b\n" "$yellow" "$reset"
