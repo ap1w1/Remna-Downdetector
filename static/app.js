@@ -34,6 +34,7 @@ let settingsHydrated = false;
 let toastTimer = null;
 let refreshTimer = null;
 let dpiOverview = { profile: {}, checks: [], pops: [], stats: [] };
+let dpiPopsPromise = null;
 let onlineHours = 24;
 let onlineSelected = new Set();
 const CHART_SERIES_COUNT = 8;
@@ -860,6 +861,7 @@ async function openNode(uuid) {
   history = [];
   $("#dialog-chart").innerHTML = '<div class="empty">Загрузка истории…</div>';
   $("#node-dialog").showModal();
+  if (dpiAvailable() && !dpiOverview.pops.length) loadDpiPops();
   await loadHistory();
 }
 
@@ -1149,6 +1151,31 @@ function filterScheduleRegions() {
   $("#schedule-region-count").textContent = count ? `Выбрано: ${count}` : "Оптимальный набор";
 }
 function filterNodeRegions() { const query = $("#node-region-search").value.trim().toLowerCase(); $$("#node-regions label").forEach((label) => { label.hidden = Boolean(query) && !label.textContent.toLowerCase().includes(query); }); const count = checked("#node-regions").length; $("#node-region-count").textContent = count ? `Выбрано: ${count}` : "Оптимальный набор"; }
+
+async function loadDpiPops(force = false) {
+  if (!dpiAvailable()) return;
+  if (dpiOverview.pops.length && !force) {
+    renderDpiOverview();
+    return;
+  }
+  if (dpiPopsPromise) return dpiPopsPromise;
+  if (selected) $("#node-regions").innerHTML = '<span class="muted">Загрузка регионов DPI Checker…</span>';
+  dpiPopsPromise = (async () => {
+    try {
+      const response = await fetch("/api/dpi/pops", { cache: "no-store" });
+      if (!response.ok) throw new Error(await jsonError(response));
+      const payload = await response.json();
+      dpiOverview.pops = collection(payload, "pops", "items", "results", "data");
+      renderDpiOverview();
+      if (selected && !dpiOverview.pops.length) $("#node-regions").innerHTML = '<span class="muted">DPI Checker не вернул доступные регионы</span>';
+    } catch (error) {
+      if (selected) $("#node-regions").innerHTML = `<span class="muted dpi-regions-error">Не удалось загрузить регионы: ${esc(error.message)} <button type="button" data-retry-dpi-pops>Повторить</button></span>`;
+    } finally {
+      dpiPopsPromise = null;
+    }
+  })();
+  return dpiPopsPromise;
+}
 
 async function loadDpiOverview() {
   if (!dpiAvailable()) return;
@@ -1539,6 +1566,7 @@ $$('[data-node-panel]').forEach((button) => button.addEventListener("click", () 
   const panel = button.dataset.nodePanel;
   $$('[data-node-panel]').forEach((item) => item.classList.toggle("active", item === button));
   $$('.node-panel').forEach((item) => item.classList.toggle("active", item.dataset.panel === panel));
+  if (panel === "automation" && dpiAvailable() && !dpiOverview.pops.length) loadDpiPops();
 }));
 
 $$("#node-dialog .range-tabs button").forEach((button) => {
@@ -1705,6 +1733,7 @@ $("#schedule-pops").addEventListener("change", filterScheduleRegions);
 $("#schedule-nodes").addEventListener("change", updateScheduleNodeCount);
 $("#node-region-search").addEventListener("input", filterNodeRegions);
 $("#node-regions").addEventListener("change", filterNodeRegions);
+$("#node-regions").addEventListener("click", (event) => { if (event.target.closest("[data-retry-dpi-pops]")) loadDpiPops(true); });
 $("#dpi-node-options").addEventListener("change", () => { updateDpiNodeCount(); const first = checked("#dpi-node-options")[0]; selected = state.nodes.find((node) => node.uuid === first) || null; if (selected) loadDpi(); });
 $("#dpi-schedule-mode").addEventListener("change", syncScheduleMode);
 $("#dpi-schedule-enabled").addEventListener("change", syncScheduleEnabled);

@@ -2083,6 +2083,18 @@ async def dpi_overview(_: str = Depends(require_user)):
         raise HTTPException(502, "DPI Checker is unavailable") from exc
 
 
+@app.get("/api/dpi/pops")
+async def dpi_pops(_: str = Depends(require_user)):
+    if not dpi_is_configured():
+        raise HTTPException(503, "DPI_API_KEY is not configured")
+    try:
+        return {"pops": await create_dpi_client().pops()}
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(502, f"DPI Checker returned HTTP {exc.response.status_code}") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, "DPI Checker is unavailable") from exc
+
+
 @app.get("/internal/metrics")
 async def metrics(credentials: HTTPBasicCredentials | None = Depends(security)):
     expected = settings.app_secret[:24]

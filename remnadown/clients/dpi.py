@@ -169,6 +169,16 @@ class DpiClient:
                 "pops": pops.json(),
             }
 
+    async def pops(self) -> list[dict[str, Any]]:
+        async with self.client() as client:
+            response = await client.get(
+                "/pops",
+                params={"location": "russia", "healthy": "true"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+            return payload if isinstance(payload, list) else payload.get("pops", [])
+
     async def profile(self) -> dict[str, Any]:
         async with self.client() as client:
             response = await client.get("/profile")

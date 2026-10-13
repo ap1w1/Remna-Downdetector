@@ -2873,6 +2873,7 @@ circle[class*="chart-series-"] { fill: var(--chart-series-color); }
 .workflow-conditions input:focus-visible + i { outline:2px solid var(--rw-cyan); outline-offset:2px; }
 .workflow-conditions b,.workflow-conditions small { display:block; }
 .workflow-conditions b { font-size:10px; }.workflow-conditions small { margin-top:2px; color:var(--rw-dark-2); font-size:8px; }
+.dpi-regions-error button{margin-left:6px;padding:4px 7px;border:1px solid rgba(34,211,238,.25);border-radius:6px;background:rgba(34,211,238,.08);color:var(--rw-cyan);font-size:8px;font-weight:800;cursor:pointer}
 
 #schedule-nodes label > span { display: flex; min-width: 0; align-items: center; gap: 7px; }
 #schedule-nodes label > span > span { display: grid; min-width: 0; gap: 2px; }
