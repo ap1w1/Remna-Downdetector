@@ -17,7 +17,7 @@ const REGIONS = {
 };
 const WEBHOOK_EVENTS = ["node.unavailable", "node.available", "node.online_drop", "node.online_recovered", "node.host_hidden", "node.cpu_threshold", "node.ram_threshold", "node.rx_threshold", "node.tx_threshold", "node.ip_changed", "domain.ip_changed", "dpi.check_started", "dpi.check_completed", "dpi.balance_low", "rule.action_started", "rule.action_completed"];
 const TELEGRAM_EVENTS = [...WEBHOOK_EVENTS, "auth.login", "auth.failed"];
-$("#event-filter")?.insertAdjacentHTML("beforeend", '<option value="node.host_hidden">Host скрыт</option>');
+$("#event-filter")?.insertAdjacentHTML("beforeend", '<option value="node.host_hidden">Host отключён</option>');
 
 let state = { nodes: [], events: [], webhooks: [], settings: {}, integration_alerts: [] };
 let selected = null;
@@ -386,7 +386,7 @@ const EVENT_META = {
     className: "recovered",
     icon: '<svg viewBox="0 0 24 24"><path d="M4 17h5v-5M20 7h-5v5M9 12l-5 5M15 12l5-5"/></svg>',
   },
-  "node.host_hidden": { label: "Host скрыт", className: "drop", icon: '<svg viewBox="0 0 24 24"><path d="M3 12s3-6 9-6 9 6 9 6-3 6-9 6-9-6-9-6Z"/><path d="m4 4 16 16"/></svg>' },
+  "node.host_hidden": { label: "Host отключён", className: "drop", icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="m9 9 6 6M15 9l-6 6"/></svg>' },
   "node.ip_changed": {
     label: "IP ноды изменён",
     className: "available",

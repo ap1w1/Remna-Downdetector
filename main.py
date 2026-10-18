@@ -410,7 +410,7 @@ async def telegram_notify(category: str, message: str, event_type: str = "") -> 
 
 
 def event_message(event: str, node: dict[str, Any], sample: dict[str, Any]) -> str:
-    labels = {"node.unavailable": "🔴 Нода недоступна", "node.available": "🟢 Нода снова доступна", "node.online_drop": "🟠 Падение онлайна", "node.online_recovered": "🟢 Онлайн восстановлен", "node.host_hidden": "🙈 Host скрыт"}
+    labels = {"node.unavailable": "🔴 Нода недоступна", "node.available": "🟢 Нода снова доступна", "node.online_drop": "🟠 Падение онлайна", "node.online_recovered": "🟢 Онлайн восстановлен", "node.host_hidden": "⛔ Host отключён"}
     return f"<b>{labels.get(event, event)}</b>\nНода: <b>{html.escape(str(node['name']))}</b>\nАдрес: <code>{html.escape(str(node.get('address', '')))}</code>\nОнлайн: {int(sample.get('online', 0))}"
 
 
@@ -531,7 +531,7 @@ def schedule_hide_node_hosts(node_uuid: str, reason: str) -> None:
         try:
             await hide_node_hosts(node_uuid, reason)
         except Exception:
-            logger.exception("Failed to hide hosts node=%s reason=%s", node_uuid, reason)
+            logger.exception("Failed to disable hosts node=%s reason=%s", node_uuid, reason)
         finally:
             host_hide_tasks.discard(node_uuid)
 
@@ -549,20 +549,22 @@ async def hide_node_hosts(node_uuid: str, reason: str) -> bool:
     if not linked:
         raise ValueError("No Remnawave hosts are linked to the node")
     changed = []
+    host_uuids = []
     for host in linked:
         if host.get("isDisabled"):
             continue
         host_uuid = str(host.get("uuid", ""))
         if host_uuid:
-            await app.state.remna.set_host_disabled(host_uuid, True)
+            host_uuids.append(host_uuid)
             changed.append({"uuid": host_uuid, "remark": str(host.get("remark", "")), "address": str(host.get("address", ""))})
-    payload = {"reason": reason, "hosts": changed, "host_count": len(changed)}
+    await app.state.remna.disable_hosts(host_uuids)
+    payload = {"reason": reason, "action": "disabled", "is_disabled": True, "hosts": changed, "host_count": len(changed)}
     with closing(connect_db()) as db:
         db.execute("UPDATE node_state SET host_hidden=1 WHERE node_uuid=?", (node_uuid,))
         db.execute("INSERT INTO events(node_uuid,event,payload,created_at) VALUES(?,?,?,?)", (node_uuid, "node.host_hidden", json.dumps(payload), utc_now()))
         db.commit()
     await send_webhooks("node.host_hidden", dict(node), payload)
-    await telegram_notify("events", f"<b>🙈 Host скрыт</b>\nНода: <b>{html.escape(node['name'])}</b>\nПричина: <code>{html.escape(reason)}</code>\nHost: {len(changed)}", "node.host_hidden")
+    await telegram_notify("events", f"<b>⛔ Host отключён</b>\nНода: <b>{html.escape(node['name'])}</b>\nПричина: <code>{html.escape(reason)}</code>\nHost: {len(changed)}", "node.host_hidden")
     return True
 
 

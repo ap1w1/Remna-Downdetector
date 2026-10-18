@@ -504,6 +504,19 @@ class RemnawaveClient:
         )
         response.raise_for_status()
 
+    async def disable_hosts(self, host_uuids: list[str]) -> None:
+        if not host_uuids:
+            return
+        response = await self.client.post(
+            "/api/hosts/bulk/disable",
+            json={"uuids": host_uuids},
+        )
+        if response.status_code in {404, 405}:
+            for host_uuid in host_uuids:
+                await self.set_host_disabled(host_uuid, True)
+            return
+        response.raise_for_status()
+
     async def infra_providers(self) -> list[dict[str, Any]]:
         response = await self.client.get("/api/infra-billing/providers")
         response.raise_for_status()
