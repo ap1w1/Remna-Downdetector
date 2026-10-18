@@ -276,6 +276,7 @@ function renderSummary() {
 function nodeRow(node) {
   const sample = latestSample(node);
   const status = nodeState(node);
+  const hostDisabled = Boolean(node.host_hidden);
   const ram = Math.max(0, Math.min(100, finite(sample.ram_percent) ?? 0));
   const cpu = Math.max(0, Math.min(100, finite(sample.cpu_percent) ?? 0));
   const loadPressure = node.cpu_count
@@ -290,11 +291,11 @@ function nodeRow(node) {
     .map((value) => value === null ? "—" : value.toFixed(2))
     .join(" ");
   return `
-    <button class="node-row ${status.className}" type="button" data-node="${esc(node.uuid)}">
+    <button class="node-row ${status.className} ${hostDisabled ? "host-disabled" : ""}" type="button" data-node="${esc(node.uuid)}">
       <span class="node-primary">
         <span class="node-title-line">
           <span class="health-icon">${healthIcon(status.className)}</span>
-          <span class="online-badge"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8"/></svg>${compactNumber(node.latest_online)}</span>
+          ${hostDisabled ? '<span class="online-badge host-off-badge" title="Host отключён"><svg viewBox="0 0 24 24"><path d="M12 3v8M7.05 6.05a7 7 0 1 0 9.9 0"/></svg><span>OFF</span></span>' : `<span class="online-badge"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8"/></svg>${compactNumber(node.latest_online)}</span>`}
           ${flag(node.country_code)}
           <span class="node-name">${esc(node.name)}</span>
         </span>
@@ -1368,9 +1369,13 @@ function toast(message, bad = false) {
   const element = $("#toast");
   element.textContent = message;
   element.classList.toggle("bad", bad);
-  element.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => element.classList.remove("show"), 2800);
+  if (element.showPopover && !element.matches(":popover-open")) element.showPopover();
+  requestAnimationFrame(() => element.classList.add("show"));
+  toastTimer = setTimeout(() => {
+    element.classList.remove("show");
+    setTimeout(() => { if (element.hidePopover && element.matches(":popover-open")) element.hidePopover(); }, 180);
+  }, 3200);
 }
 
 async function beep() {

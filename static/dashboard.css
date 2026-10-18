@@ -1501,6 +1501,27 @@ legend small {
   color: var(--rw-indigo);
 }
 
+.node-row.host-disabled,
+.node-row.host-disabled:hover {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: linear-gradient(100deg, rgba(55, 65, 75, 0.48), rgba(39, 45, 53, 0.42), rgba(25, 29, 34, 0.86));
+  color: var(--rw-dark-2);
+}
+
+.node-row.host-disabled .node-provider,
+.node-row.host-disabled .node-traffic,
+.node-row.host-disabled .node-runtime,
+.node-row.host-disabled .node-subline {
+  opacity: 0.58;
+  filter: grayscale(1);
+}
+
+.host-off-badge {
+  border-color: rgba(148, 163, 184, 0.38);
+  background: rgba(148, 163, 184, 0.1);
+  color: #a8b1bd;
+}
+
 #refresh.is-refreshing svg,
 #refresh-domains.is-refreshing svg {
   animation: refresh-spin .75s linear infinite;
@@ -2191,17 +2212,21 @@ circle[class*="chart-series-"] { fill: var(--chart-series-color); }
 
 .toast {
   position: fixed;
-  z-index: 100;
+  z-index: 2147483647;
+  inset: auto 18px 18px auto;
   right: 18px;
   bottom: 18px;
-  max-width: min(360px, calc(100vw - 36px));
-  padding: 11px 14px;
+  width: auto;
+  max-width: min(440px, calc(100vw - 36px));
+  margin: 0;
+  padding: 14px 17px;
   border: 1px solid rgba(45, 212, 191, 0.35);
   border-radius: var(--rw-radius-md);
   background: var(--rw-dark-6);
   color: var(--rw-dark-0);
   box-shadow: var(--rw-shadow);
-  font-size: 11px;
+  font-size: 12px;
+  font-weight: 650;
   opacity: 0;
   pointer-events: none;
   transform: translateY(12px);
