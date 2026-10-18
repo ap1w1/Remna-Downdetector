@@ -1558,12 +1558,16 @@ async def add_node_ip(node_uuid: str, body: IpPoolCreate, request: Request, _: s
             raise HTTPException(404, "Node not found")
         cursor = db.execute("INSERT INTO node_ip_pool(node_uuid,address,priority) VALUES(?,?,?) ON CONFLICT(node_uuid,address) DO UPDATE SET priority=excluded.priority RETURNING id", (node_uuid, body.address, body.priority))
         row_id = int(cursor.fetchone()["id"])
+        if body.skip_check:
+            db.execute("UPDATE node_ip_pool SET status='valid',error='',last_tested='' WHERE id=?", (row_id,))
         db.commit()
+    if body.skip_check:
+        return {"id": row_id, "valid": True, "skipped": True, "error": ""}
     ok, error = await test_node_address(request.app, node_uuid, body.address, node["address"])
     with closing(connect_db()) as db:
         db.execute("UPDATE node_ip_pool SET status=?,error=?,last_tested=? WHERE id=?", ("valid" if ok else "invalid", error, utc_now(), row_id))
         db.commit()
-    return {"id": row_id, "valid": ok, "error": error}
+    return {"id": row_id, "valid": ok, "skipped": False, "error": error}
 
 
 @app.put("/api/nodes/{node_uuid}/ips/{ip_id}")

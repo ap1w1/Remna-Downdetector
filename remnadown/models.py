@@ -30,6 +30,7 @@ class NodeSettingsUpdate(BaseModel):
 class IpPoolCreate(BaseModel):
     address: str
     priority: int = 100
+    skip_check: bool = False
     csrf_token: str
 
 

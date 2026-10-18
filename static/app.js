@@ -536,7 +536,7 @@ function renderIpPool(node) {
   const items = node.ip_pool || [];
   $("#ip-pool-list").innerHTML = items.length ? items.map((item) => `
     <div class="ip-pool-row ${esc(item.status)}" draggable="true" data-ip-id="${item.id}">
-      <span class="drag-handle">⋮⋮</span><span><b>${esc(item.address)}</b><small>${item.status === "valid" ? "Привязан" : item.status === "invalid" ? esc(item.error || "Не подключился") : "Не проверен"}</small></span>
+      <span class="drag-handle">⋮⋮</span><span><b>${esc(item.address)}</b><small>${item.status === "valid" ? (item.last_tested ? "Проверен и доступен" : "Добавлен без проверки") : item.status === "invalid" ? esc(item.error || "Не подключился") : "Не проверен"}</small></span>
       <span class="ip-row-actions"><button class="icon-row-button" type="button" data-recheck-ip="${item.id}" title="Перепроверить">↻</button><button class="icon-row-button activate" type="button" data-activate-ip="${item.id}" title="Установить этот IP" ${item.status !== "valid" ? "disabled" : ""}>✓</button><button class="icon-row-button danger" type="button" data-delete-ip="${item.id}" title="Удалить">×</button></span>
     </div>
   `).join("") : '<div class="empty">Резервные IP не добавлены</div>';
@@ -1632,19 +1632,21 @@ $("#ip-pool-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!selected) return;
   const form = event.currentTarget;
-  const button = $("button[type='submit']", form);
-  button.disabled = true;
-  button.textContent = "Проверка 15 секунд…";
+  const button = event.submitter || $("button[type='submit']", form);
+  const skipCheck = button.name === "skip_check";
+  const originalText = button.textContent;
+  $$("button[type='submit']", form).forEach((item) => { item.disabled = true; });
+  button.textContent = skipCheck ? "Добавление…" : "Проверка 15 секунд…";
   const response = await fetch(`/api/nodes/${encodeURIComponent(selected.uuid)}/ips`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address: form.address.value.trim(), priority: Number(form.priority.value), csrf_token: csrf }),
+    body: JSON.stringify({ address: form.address.value.trim(), priority: Number(form.priority.value), skip_check: skipCheck, csrf_token: csrf }),
   });
-  button.disabled = false;
-  button.textContent = "Добавить и проверить";
+  $$("button[type='submit']", form).forEach((item) => { item.disabled = false; });
+  button.textContent = originalText;
   if (response.ok) {
     const result = await response.json();
-    toast(result.valid ? "IP привязан к ноде" : `IP не прошёл проверку: ${result.error}`, !result.valid);
+    toast(result.skipped ? "IP добавлен без проверки" : result.valid ? "IP проверен и добавлен" : `IP не прошёл проверку: ${result.error}`, !result.valid);
     form.address.value = "";
     await load({ force: true });
     if (selected) renderIpPool(selected);
