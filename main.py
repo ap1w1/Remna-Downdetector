@@ -97,7 +97,11 @@ async def application_version() -> dict[str, Any]:
             if now - float(update_cache["checked_at"]) >= UPDATE_CACHE_SECONDS:
                 try:
                     async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
-                        response = await client.get(UPDATE_CHECK_URL, headers={"User-Agent": f"RemnaDown/{APP_VERSION}"})
+                        response = await client.get(
+                            UPDATE_CHECK_URL,
+                            params={"check": int(time.time() // UPDATE_CACHE_SECONDS)},
+                            headers={"User-Agent": f"RemnaDown/{APP_VERSION}", "Cache-Control": "no-cache"},
+                        )
                         response.raise_for_status()
                     latest = response.text.strip().lstrip("v")
                     if not re.fullmatch(r"\d+(?:\.\d+){2}", latest):
